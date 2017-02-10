@@ -87,3 +87,9 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Vim stuff
+.swp
+
+# Ignore data directory because it has large files
+data/
