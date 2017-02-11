@@ -10,7 +10,7 @@ import plotly.graph_objs as go
 import plotly.tools as tls
 from tqdm import tqdm
 
-from rnn_model import RecurrentActivityModel
+from embedded_rnn_model import RecurrentActivityModel
 from helpers.dataloaders import MatLoader as ld
 from helpers.utils import *
 
@@ -49,6 +49,12 @@ def main():
                         help='number of sequences forward to guess')
     parser.add_argument('--test', type=float, default=0.2,
                         help='percentage of the dataset to set aside for testing')
+    parser.add_argument('--lr', type=float, default=1e-4,
+                        help='Initial Learning Rate')
+    parser.add_argument('--layers', type=float, default=1,
+                        help='Num Layers in RNN')
+    parser.add_argument('--bin_size', type=float, default=10,
+                        help='Size of bin for resampling input data(1000Hz)')
 
     FLAGS = parser.parse_args()
     train(FLAGS)
@@ -69,10 +75,13 @@ def train(FLAGS):
     state_size = FLAGS.rnn_size
     num_epochs = FLAGS.epochs
     next_n = FLAGS.guess
-    binning = 10
+    binning = FLAGS.bin_size
     test_frac = FLAGS.test
-    train_input = tf.placeholder(tf.float32, [batch_size,num_steps,n_use], name='input_placeholder')
-    train_target= tf.placeholder(tf.float32, [batch_size,next_n,n_use], name='labels_placeholder')
+    learning_rate = FLAGS.lr
+    train_input = tf.placeholder(tf.int32, [batch_size,num_steps], name='input_placeholder')
+    train_target= tf.placeholder(tf.int32, [batch_size,n_use], name='labels_placeholder')
+    x_set_dim= tf.placeholder(tf.int32, shape=(), name='x_set_dim_placeholder')
+    y_set_dim= tf.placeholder(tf.int32, shape=(), name='y_set_dim_placeholder')
     #state_tuple=
 
     # load data
@@ -102,7 +111,9 @@ def train(FLAGS):
     train_epoch_length = len(train_idxs)//batch_size
     test_idxs = idxs[-int(test_frac*epoch_size):]
     test_epoch_length = len(test_idxs)//batch_size
-    raw_data = (raw_x, raw_x)
+    raw_data = raw_x
+    train_vec_set = vec_set(raw_x,FLAGS,idxs=train_idxs)
+    test_vec_set = vec_set(raw_x,FLAGS,idxs=test_idxs)
 
     if STREAMING:
         # setup streaming heatmap object
@@ -165,7 +176,7 @@ def train(FLAGS):
 
                     yaxis=dict(
                         title='time (%dms)' % (binning),
-                        range=[-num_steps,next_n]
+                        routputange=[-num_steps,next_n]
                         ),
 
                     xaxis=dict(
@@ -204,17 +215,22 @@ def train(FLAGS):
                     train_input,
                     train_target,
                     mean_raw_x,
-                    num_steps,
-                    state_size,
-                    next_n,
-                    learning_rate=.001)
+                    len(train_vec_set['t_map']),
+                    len(train_vec_set['n_map']),
+                    FLAGS)
             if VERBOSE:
                 print("it took", time.time() - t, "seconds to build the Train graph")
 
     with tf.name_scope('Test'):
         with tf.variable_scope('Model', reuse=True):
             t = time.time()
-            m_test = RecurrentActivityModel(train_input, train_target, mean_raw_x, num_steps, state_size,next_n)
+            m_test = RecurrentActivityModel(
+                    train_input,
+                    train_target,
+                    mean_raw_x,
+                    len(test_vec_set['t_map']),
+                    len(test_vec_set['n_map']),
+                    FLAGS)
             if VERBOSE:
                 print("it took", time.time() - t, "seconds to build the Test graph")
 
@@ -241,9 +257,15 @@ def train(FLAGS):
         for idx,epoch in enumerate(gen_epochs(num_epochs,raw_data,train_idxs,batch_size,num_steps,n_use,next_n,FLAGS)):
             b_id = np.random.randint(batch_size)
             status = "EPOCH: %d LR: %.5f" % (idx,last_vals['status']['lr'])
-            for step,(X,Y,XY) in tqdm(enumerate(epoch),desc=status,total=train_epoch_length):
+            for step,(X,Y,XY,lookups) in tqdm(enumerate(epoch),desc=status,total=train_epoch_length):
+                FLAGS.x_set_dim = len(lookups['t_map'])
+                FLAGS.y_set_dim = len(lookups['n_map'])
+                import pdb; pdb.set_trace()
                 feed_dict = {train_input:X,
-                             train_target:Y}
+                             train_target:Y,
+                             x_set_dim:FLAGS.x_set_dim,
+                             y_set_dim:FLAGS.y_set_dim
+                             }
                 fetchers = {
                     'summary':      model.merge_summaries,
                     'status':       model.status,
@@ -287,7 +309,7 @@ def train(FLAGS):
                 # testing
                 test_status = "EPOCH: %d testing..." % idx
                 for epoch in gen_epochs(1,raw_data, test_idxs,batch_size,num_steps,n_use,next_n,FLAGS):
-                    for test_step, (X,Y,XY) in tqdm(enumerate(epoch),desc=test_status,total=test_epoch_length):
+                    for test_step, (X,Y,XY,lookups) in tqdm(enumerate(epoch),desc=test_status,total=test_epoch_length):
                         test_feed_dict = {train_input:X,
                                          train_target:Y}
                         test_fetchers = {
