@@ -11,6 +11,20 @@ from neon.callbacks.callbacks import Callbacks
 from neon import NervanaObject, logger as neon_logger
 from neon.util.argparser import NeonArgparser, extract_valid_args
 
+class TimeSeries(object):
+
+    def __init__(self, x, binning=10, divide=0.2):
+        self.x = x
+
+        self.nfeatures = np.size(self.x,axis=1)
+        self.data = x.reshape(binning, -1, self.nfeatures).sum(axis=0)
+
+        L = len(self.data)
+        c = int(L * (1 - divide))
+        self.train = self.data[:c]
+        self.test = self.data[c:]
+
+
 class DataIteratorSequence(NervanaObject):
 
     """

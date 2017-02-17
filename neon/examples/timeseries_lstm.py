@@ -271,6 +271,7 @@ if __name__ == '__main__':
     # create synthetic data as a whole series
     time_series = TimeSeries(npoints, ncycles=ncycles,
                              curvetype=args.curvetype)
+    import pdb; pdb.set_trace()
 
     # use data iterator to feed X, Y. return_sequence determines training
     # strategy
