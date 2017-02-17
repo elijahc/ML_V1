@@ -7,17 +7,38 @@ from neon.layers import GeneralizedCost, LSTM, Affine, RecurrentLast
 from neon.models import Model
 from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Identity, MeanSquared
+from neon.transforms.cost import Metric
 from neon.callbacks.callbacks import Callbacks
 from neon import NervanaObject, logger as neon_logger
 from neon.util.argparser import NeonArgparser, extract_valid_args
+from sklearn.preprocessing import MinMaxScaler
+
+class FractionExplainedVariance(Metric):
+
+    def __init__(self):
+        self.metric_names = ['FEV']
+        self.batch_size = self.be.bsz
+        self.nfeatures = y.shape[0]
+        self.time_steps = self.nfeatures[1] / self.batch_size
+        self.fev = self.be.iobuf(1)
+
+    def __call__(self, y,t,calcrange=slice(0,None)):
+        #self.t_mean = self.be.mean(t,axis=1)
+        #self.var[:] = self.be.sum(self.be.square(self.t_mean - t), axis=0) / 2.
+        #self.fev[:] = 1 - ((self.be.sum(self.be.square(y - t), axis=0) / 2.) / self.fev)
+
+        return np.array(self.fev.get()[:,calcrange].mean())
+
 
 class TimeSeries(object):
 
-    def __init__(self, x, binning=10, divide=0.2):
+    def __init__(self, x, binning=10, divide=0.2, scale=True):
         self.x = x
 
         self.nfeatures = np.size(self.x,axis=1)
-        self.data = x.reshape(binning, -1, self.nfeatures).sum(axis=0)
+        self.data = x.reshape(binning, -1, self.nfeatures).sum(axis=0).astype(np.float64)
+        scaler = MinMaxScaler(feature_range=(0,1))
+        #self.data = scaler.fit_transform(self.data)
 
         L = len(self.data)
         c = int(L * (1 - divide))

@@ -1,34 +1,30 @@
 import scipy.io as sio
-from v1_lstm import TimeSeries
-from v1_lstm import DataIteratorSequence
+from v1_lstm import TimeSeries, DataIteratorSequence, FractionExplainedVariance
 from neon.backends import gen_backend
 from neon.initializers import GlorotUniform
 from neon.layers import GeneralizedCost, LSTM, Affine, RecurrentLast
 from neon.models import Model
-from neon.optimizers import RMSProp
-from neon.transforms import Logistic, Tanh, Identity, MeanSquared
-from neon.callbacks.callbacks import Callbacks
+from neon.optimizers import Adam, ExpSchedule
+from neon.transforms import *
+from neon.transforms.cost import Metric
+from neon.callbacks.callbacks import Callbacks, MetricCallback
 from neon import logger as neon_logger
 from neon.util.argparser import NeonArgparser, extract_valid_args
-from sklearn.preprocessing import MinMaxScaler
 
 parser = NeonArgparser(__doc__)
 args = parser.parse_args(gen_be=False)
 
 mat_data = sio.loadmat('../data/timeseries/02_timeseries.mat')['timeseries']
 
-scaler = MinMaxScaler(feature_range=(0,1))
-input_data = scaler.fit_transform(mat_data)
-ts = TimeSeries(input_data)
+ts = TimeSeries(mat_data)
 
-seq_len = 30
+seq_len = 40
 hidden = 32
 
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
-train_set = DataIteratorSequence(ts.train, seq_len, return_sequences=True)
-valid_set = DataIteratorSequence(ts.test, seq_len, return_sequences=True)
-import pdb; pdb.set_trace()
+train_set = DataIteratorSequence(ts.train, seq_len, forward=3, return_sequences=True)
+valid_set = DataIteratorSequence(ts.test, seq_len, forward=3, return_sequences=True)
 
 init = GlorotUniform()
 
@@ -39,10 +35,16 @@ layers = [
         ]
 
 model = Model(layers=layers)
-cost = GeneralizedCost(MeanSquared())
-optimizer = RMSProp(stochastic_round=args.rounding)
+
+#s = ExpSchedule(decay=0.7)
+cost = GeneralizedCost(SumSquared())
+
+#optimizer = RMSProp(stochastic_round=args.rounding)
+optimizer = Adam(learning_rate=0.01,beta_1=0.9,beta_2=0.999)
 
 callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
+callbacks.add_callback(MetricCallback(eval_set=valid_set, metric=FractionExplainedVariance(), epoch_freq=args.eval_freq))
+#callbacks.add_callback(MetricCallback(eval_set=valid_set,metric=Accuracy(),  epoch_freq=args.eval_freq))
 
 model.fit(train_set,
           optimizer=optimizer,
