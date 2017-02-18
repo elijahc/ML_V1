@@ -89,7 +89,7 @@ ENV/
 .ropeproject
 
 # Vim stuff
-.swp
+*.swp
 
 # Ignore data directory because it has large files
 data/
