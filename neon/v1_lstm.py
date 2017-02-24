@@ -1,6 +1,7 @@
 from builtins import object
 import numpy as np
 import math
+from neon.data.dataiterator import ArrayIterator
 from neon.backends import gen_backend
 from neon.initializers import GlorotUniform
 from neon.layers import GeneralizedCost, LSTM, Affine, RecurrentLast
@@ -13,58 +14,45 @@ from neon import NervanaObject, logger as neon_logger
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from sklearn.preprocessing import MinMaxScaler
 
-class FractionExplainedVariance(Metric):
-
-    def __init__(self):
-        self.metric_names = ['FEV']
-        self.batch_size = self.be.bsz
-        #self.nfeatures = y.shape[0]
-        #self.time_steps = self.nfeatures[1] / self.batch_size
-        self.fev = self.be.iobuf(1)
-
-    def __call__(self, y,t,calcrange=slice(0,None)):
-        #self.t_mean = self.be.mean(t,axis=1)
-        #self.var[:] = self.be.sum(self.be.square(self.t_mean - t), axis=0) / 2.
-        #self.fev[:] = 1 - ((self.be.sum(self.be.square(y - t), axis=0) / 2.) / self.fev)
-
-        return np.array(self.fev.get()[:,calcrange].mean())
-
-
 class TimeSeries(object):
 
-    def __init__(self, x, binning=10, divide=0.2, scale=True):
+    def __init__(self, x, binning=10, divide=0.2, scale=False):
         self.x = x
-
+        self.raw_samples = x.shape[0]
         self.nfeatures = np.size(self.x,axis=1)
-        self.data = x.reshape(binning, -1, self.nfeatures).sum(axis=0).astype(np.float64)
+
+        extra_examples = self.raw_samples % binning
+        if extra_examples:
+            self.x = x[:-extra_examples]
+
+        self.data = self.x.reshape(binning, -1, self.nfeatures).sum(axis=0).astype(np.float64)
         scaler = MinMaxScaler(feature_range=(0,1))
-        #self.data = scaler.fit_transform(self.data)
+        if scale:
+            self.data = scaler.fit_transform(self.data)
 
         L = len(self.data)
-        c = int(L * (1 - divide))
-        self.train = self.data[:c]
-        self.test = self.data[c:]
+        c = int(L * (divide))
+        self.train = self.data[c:]
+        self.test = self.data[:c]
 
-class WeightedSumSquared(Cost):
+class V1TimeSeries(object):
 
-    def __init__(self, weights):
-        self.a = self.be.array(weights)
-        self.funcgrad = lambda y,t: self.a*(y-t)
+    def __init__(self, spikes, stim, binning=10, divide=0.2, scale=False):
+        self.spikes = TimeSeries(x=spikes, binning=binning, divide=divide, scale=False)
+        self.stim = TimeSeries(x=stim.reshape(-1,1), binning=binning, divide=divide, scale=False)
 
-    def __call__(self, y,t):
-        
-        self.se = self.be.square(y-t)
-        self.wse = self.be.sum(self.se*self.a,axis=0)/2.
-        return self.wse
+        self.train = {'spikes':self.spikes.train, 'stim':self.stim.train}
+        self.test = {'spikes':self.spikes.test, 'stim':self.stim.test}
 
-class DataIteratorSequence(NervanaObject):
+class V1IteratorSequence(NervanaObject):
 
     """
     This class takes a sequence and returns an iterator providing data in batches suitable for RNN
     prediction.  Meant for use when the entire dataset is small enough to fit in memory.
     """
 
-    def __init__(self, X, time_steps, forward=1, return_sequences=True):
+
+    def __init__(self, X_dict, time_steps, forward=1, return_sequences=True, randomize=False):
         """
         Implements loading of given data into backend tensor objects. If the backend is specific
         to an accelerator device, the data is copied over to that device.
@@ -83,13 +71,38 @@ class DataIteratorSequence(NervanaObject):
                                                   value will be a single step, input data will be
                                                   a rolling_window
         """
+
+        def rolling_window(spikes,stim, lag):
+            """
+            Convert a into time-lagged vectors
+
+            a    : (n, p)
+            lag  : time steps used for prediction
+
+            returns  (n-lag+1, lag, p)  array
+
+            (Building time-lagged vectors is not necessary for neon.)
+            """
+            assert spikes.shape[0] > lag
+            assert stim.shape[0] > lag
+
+            spikes_shape = [spikes.shape[0] - lag + 1, lag, spikes.shape[-1]]
+            stim_shape = [stim.shape[0] - lag + 1, lag, stim.shape[-1]]
+            spikes_strides = [spikes.strides[0], spikes.strides[0], spikes.strides[-1]]
+            stim_strides = [stim.strides[0], stim.strides[0], stim.strides[-1]]
+
+            spikes_out = np.lib.stride_tricks.as_strided(spikes, shape=spikes_shape, strides=spikes_strides)
+            stim_out = np.lib.stride_tricks.as_strided(stim, shape=stim_shape, strides=stim_strides)
+            return {'spikes': spikes_out, 'stim':stim_out}
+
         self.seq_length = time_steps
         self.forward = forward
         self.batch_index = 0
-        self.nfeatures = self.nclass = X.shape[1]
-        self.nsamples = X.shape[0]
+        self.nfeatures = self.nclass = X_dict['spikes'].shape[1]
+        self.nsamples = X_dict['spikes'].shape[0]
         self.shape = (self.nfeatures, time_steps)
         self.return_sequences = return_sequences
+        self.mean = X_dict['spikes'].mean(axis=0)
 
         target_steps = time_steps if return_sequences else 1
         # pre-allocate the device buffer to provide data for each minibatch
@@ -102,7 +115,8 @@ class DataIteratorSequence(NervanaObject):
             # truncate to make the data fit into multiples of batches
             extra_examples = self.nsamples % (self.be.bsz * time_steps)
             if extra_examples:
-                X = X[:-extra_examples]
+                X_dict['spikes'] = X_dict['spikes'][:-extra_examples]
+                X_dict['stim'] = X_dict['stim'][:-extra_examples]
 
             # calculate how many batches
             self.nsamples -= extra_examples
@@ -118,14 +132,17 @@ class DataIteratorSequence(NervanaObject):
             self.y = y.reshape(self.be.bsz, self.nbatches,
                                time_steps, self.nfeatures)
         else:
-            self.X = rolling_window(X, time_steps)
-            self.X = self.X[:-1]
-            self.y = X[time_steps:]
+            X_dict['lag'] = time_steps
+            self.X = rolling_window(**X_dict)
+            self.X['spikes'] = self.X['spikes'][:-1]
+            self.X['stim'] = self.X['stim'][:-1]
+            self.y = X_dict['spikes'][time_steps:]
 
-            self.nsamples = self.X.shape[0]
+            self.nsamples = self.X['spikes'].shape[0]
             extra_examples = self.nsamples % (self.be.bsz)
             if extra_examples:
-                self.X = self.X[:-extra_examples]
+                self.X['spikes'] = self.X['spikes'][:-extra_examples]
+                self.X['stim'] = self.X['stim'][:-extra_examples]
                 self.y = self.y[:-extra_examples]
 
             # calculate how many batches
@@ -133,38 +150,42 @@ class DataIteratorSequence(NervanaObject):
             self.nbatches = self.nsamples // self.be.bsz
             self.ndata = self.nbatches * self.be.bsz
             self.y_series = self.y
+            self.spike_series = self.X['spikes']
+            self.stim_series = self.X['stim']
 
             Xshape = (self.nbatches, self.be.bsz, time_steps, self.nfeatures)
             Yshape = (self.nbatches, self.be.bsz, 1, self.nfeatures)
-            self.X = self.X.reshape(Xshape).transpose(1, 0, 2, 3)
-            self.y = self.y.reshape(Yshape).transpose(1, 0, 2, 3)
+            #self.X = self.X.reshape(Xshape).transpose(1, 0, 2, 3)
+            #self.y = self.y.reshape(Yshape).transpose(1, 0, 2, 3)
 
-    def reset(self):
-        """
-        For resetting the starting index of this dataset back to zero.
-        """
-        self.batch_index = 0
+            return ArrayIterator(X=[self.spike_series, self.stim_series],y=self.y_series,make_onehot=False)
 
-    def __iter__(self):
-        """
-        Generator that can be used to iterate over this dataset.
+    # def reset(self):
+    #     """
+    #     For resetting the starting index of this dataset back to zero.
+    #     """
+    #     self.batch_index = 0
 
-        Yields:
-            tuple : the next minibatch of data.
-        """
-        self.batch_index = 0
-        while self.batch_index < self.nbatches:
-            # get the data for this batch and reshape to fit the device buffer
-            # shape
-            X_batch = self.X[:, self.batch_index].T.reshape(
-                self.X_dev.shape).copy()
-            y_batch = self.y[:, self.batch_index].T.reshape(
-                self.y_dev.shape).copy()
+    # def __iter__(self):
+    #     """
+    #     Generator that can be used to iterate over this dataset.
 
-            # make the data for this batch as backend tensor
-            self.X_dev.set(X_batch)
-            self.y_dev.set(y_batch)
+    #     Yields:
+    #         tuple : the next minibatch of data.
+    #     """
+    #     self.batch_index = 0
+    #     while self.batch_index < self.nbatches:
+    #         # get the data for this batch and reshape to fit the device buffer
+    #         # shape
+    #         X_batch = self.X[:, self.batch_index].T.reshape(
+    #             self.X_dev.shape).copy()
+    #         y_batch = self.y[:, self.batch_index].T.reshape(
+    #             self.y_dev.shape).copy()
 
-            self.batch_index += 1
+    #         # make the data for this batch as backend tensor
+    #         self.X_dev.set(X_batch)
+    #         self.y_dev.set(y_batch)
 
-            yield self.X_dev, self.y_dev
+    #         self.batch_index += 1
+
+    #         yield self.X_dev, self.y_dev
