@@ -1,6 +1,7 @@
 from builtins import object
 import numpy as np
 import math
+import pandas as pd
 from neon.data.dataiterator import ArrayIterator
 from neon.backends import gen_backend
 from neon.initializers import GlorotUniform
@@ -14,26 +15,57 @@ from neon import NervanaObject, logger as neon_logger
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from sklearn.preprocessing import MinMaxScaler
 
-class TimeSeries(object):
+class V1HDFSTimeSeries(object):
 
-    def __init__(self, x, binning=10, divide=0.2, scale=False):
-        self.x = x
-        self.raw_samples = x.shape[0]
-        self.nfeatures = np.size(self.x,axis=1)
+    def __init__(self, df, time_steps, binning='10ms', divide=0.2, scale=False):
 
-        extra_examples = self.raw_samples % binning
-        if extra_examples:
-            self.x = x[:-extra_examples]
+        self.n_df = df
+        self.time_steps = time_steps
+        self.train_set = None
+        self.test_set = None
 
-        self.data = self.x.reshape(binning, -1, self.nfeatures).sum(axis=0).astype(np.float64)
-        scaler = MinMaxScaler(feature_range=(0,1))
-        if scale:
-            self.data = scaler.fit_transform(self.data)
+        # Remap index to date-times
+        di = pd.date_range('1/1/2000', periods=len(self.n_df), freq='L')
+        self.n_df.index = di
 
-        L = len(self.data)
-        c = int(L * (divide))
-        self.train = self.data[c:]
-        self.test = self.data[:c]
+    def get_set(self,setname):
+        if self.train_set or self.test_set == None:
+            self.segregate()
+
+        if setname == 'test':
+            return self.test_set
+        elif setname == 'train':
+            return self.train_set
+        else:
+            return None
+
+    def test_set(self):
+        if self.test_set == None:
+            self.segregate()
+
+        return self.test_set
+
+    def segregate(self, binning='20ms', divide=0.2):
+
+        # Do Scaling later I guess?
+        # scaler = MinMaxScaler(feature_range=(0,1))
+        # if scale:
+        #     self.data = scaler.fit_transform(self.data)
+
+        # Resample according to binning summing across bins
+        n_df_binned = self.n_df.resample(binning).sum()
+        self.n_samples = len(n_df_binned.index)
+
+        # Just straight split them for now, randomize later
+        c = int(self.n_samples * (divide))
+        test_set = {'stim': n_df_binned['stim'][:c],
+                    'spikes': np.nan_to_num( n_df_binned.drop('stim', axis=1)[:c].as_matrix() )}
+        train_set = {'stim': n_df_binned['stim'][c:],
+                     'spikes': np.nan_to_num( n_df_binned.drop('stim',axis=1)[c:].as_matrix() )}
+
+        self.train_set = train_set
+        self.test_set = test_set
+
 
 class V1TimeSeries(object):
 
@@ -50,7 +82,6 @@ class V1IteratorSequence(NervanaObject):
     This class takes a sequence and returns an iterator providing data in batches suitable for RNN
     prediction.  Meant for use when the entire dataset is small enough to fit in memory.
     """
-
 
     def __init__(self, X_dict, time_steps, forward=1, return_sequences=True, randomize=False):
         """

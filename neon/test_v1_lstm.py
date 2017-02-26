@@ -13,23 +13,26 @@ from neon.transforms.cost import Metric
 from neon.callbacks.callbacks import Callbacks, MetricCallback
 from neon import logger as neon_logger
 from neon.util.argparser import NeonArgparser, extract_valid_args
+from kohn_v1_dataset import KohnV1Dataset
 
 def main():
     parser = NeonArgparser(__doc__)
     args = parser.parse_args(gen_be=False)
 
-    mat_data = sio.loadmat('../data/timeseries/02_timeseries.mat')
+    #mat_data = sio.loadmat('../data/timeseries/02_timeseries.mat')
 
-    ts = V1TimeSeries(mat_data['timeseries'], mat_data['stim'], binning=10)
+    #ts = V1TimeSeries(mat_data['timeseries'], mat_data['stim'], binning=10)
 
     seq_len = 30
     hidden = 20
 
     be = gen_backend(**extract_valid_args(args, gen_backend))
 
+    kohn = KohnV1Dataset(path='../tmp/')
+    kohn.gen_iterators(seq_len)
+    import pdb; pdb.set_trace()
     train_spike_set = V1IteratorSequence(ts.train, seq_len, return_sequences=False)
     valid_spike_set = V1IteratorSequence(ts.test, seq_len, return_sequences=False)
-    import pdb; pdb.set_trace()
 
     init = GlorotUniform()
 

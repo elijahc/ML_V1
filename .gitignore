@@ -96,3 +96,5 @@ data/
 
 # Ignore output director
 output/
+
+*.h5

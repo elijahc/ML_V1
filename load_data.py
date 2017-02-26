@@ -1,5 +1,6 @@
 import scipy.io as sio
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 import argparse
 
@@ -9,6 +10,10 @@ def main():
                         help='Input data file path')
     parser.add_argument('outfile', metavar='outfile', type=str,
                         help='Path to output data')
+    parser.add_argument('--data_structure', type=str, default='timeseries', choices=['timeseries','ledger'],
+                        help='Structure to parse the data into default: timeseries')
+    parser.add_argument('--format', type=str, default='mat', choices=['mat','hdf5','csv','pickle'],
+                        help='File Format to save data default: mat')
 
     FLAGS = parser.parse_args()
     # Load files
