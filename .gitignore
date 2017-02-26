@@ -93,3 +93,6 @@ ENV/
 
 # Ignore data directory because it has large files
 data/
+
+# Ignore output director
+output/

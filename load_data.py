@@ -34,15 +34,17 @@ def main():
     #resp = np.roll(resp,-latency,3)[:,:,:,:-latency]
 
 
-    stim, spike_train = mutate(resp,stim_len,blank_len,stim_sequence)
+    stim, spike_train,ids,trial = mutate(resp,stim_len,blank_len,stim_sequence)
 
     outfile = FLAGS.outfile
     print('writing ', outfile, '...')
-    sio.savemat(outfile, {'timeseries':spike_train, 'stim':stim})
+    sio.savemat(outfile, {'timeseries':spike_train, 'stim':stim,'trial_num':trial, 'image_id':ids})
 
 def mutate(resp,stim_len,blank_len,stim_sequence):
-    sequences = []
-    labels = []
+    image_bin = []
+    spikes = []
+    image_ids = []
+    trial_ids = []
     trials = np.size(resp,2)
     num_neurons = np.size(resp,0)
     num_images = np.size(resp, 1)
@@ -56,13 +58,16 @@ def mutate(resp,stim_len,blank_len,stim_sequence):
             x_on = np.zeros(stim_len, dtype=np.uint8) + 1
             x_off= np.zeros(blank_len, dtype=np.uint8) + 0
             x = np.concatenate((x_on, x_off))
+            trial_vec = np.zeros_like(x,dtype=np.uint8) + r
+            image_vec = np.zeros_like(x,dtype=np.uint8) + image_id-1
 
             y = resp[:,image_id-1, r,:]
             i = i+1
-            sequences.extend([x])
-            #   import pdb; pdb.set_trace()
+            image_bin.extend([x])
+            image_ids.extend([image_vec])
+            trial_ids.extend([trial_vec])
 
-            labels.extend([y])
+            spikes.extend([y])
             #print(index)
             #print(ms)
         #print(index)
@@ -70,8 +75,9 @@ def mutate(resp,stim_len,blank_len,stim_sequence):
         #print(x)
         #print(y.shape)
         #print(y)
-    stim,spikes =  (np.concatenate(np.array(sequences)),np.concatenate(np.array(labels), axis=1).swapaxes(0,1))
-    return (stim,spikes)
+    stim,spikes =  ( np.concatenate( np.array(image_bin) ),np.concatenate(np.array(spikes), axis=1).swapaxes(0,1))
+    ids, trial = (np.concatenate(np.array(image_ids)),np.concatenate(np.array(trial_ids)))
+    return (stim,spikes,ids,trial)
 
 if __name__ == '__main__':
     main()
