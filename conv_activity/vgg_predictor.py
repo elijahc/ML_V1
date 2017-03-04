@@ -3,9 +3,25 @@ from vgg19 import VGG19
 from keras.preprocessing import image
 from imagenet_utils import preprocess_input
 from keras.models import Model
+from keras import backend as K
+from skimage.transform import rescale
+from scipy.ndimage.interpolation import zoom
 
-def DeepOracle():
+def DeepOracle(input_tensor=None):
 
+    # Determine proper input shape
+    if K.image_dim_ordering() == 'th':
+        input_shape = (512, None, None)
+    else:
+        input_shape = (None, None, 512)
+
+    if input_tensor is None:
+        img_input = Input(shape=input_shape)
+    else:
+        if not K.is_keras_tensor(input_tensor):
+            img_input = Input(tensor=input_tensor)
+        else:
+            img_input = input_tensor
     x = Convolution2D(16, 1, 1, activation='relu', border_mode='same', name='block1_conv1') (img_input)
     x = Convolution2D(32, 1, 1, activation='relu', border_mode='same', name='block1_conv2') (x)
     x = Convolution2D(2, 1, 1, activation='relu', border_mode='same', name='block1_conv3') (x)
@@ -15,7 +31,7 @@ def DeepOracle():
 
 def get_activations(layers):
 
-    features = []
+    activations = []
     base_model = VGG19(weights='imagenet')
 
     img_path = 'cat.jpg'
@@ -27,14 +43,15 @@ def get_activations(layers):
     for layer in layers:
 
         model = Model(input=base_model.input, output=base_model.get_layer(layer).output)
-        feature_set = model.predict(x)
+        features = model.predict(x)
 
-        features.extend([feature_set])
+        features = zoom(features, [1,8.0,8.0,1])
 
-    for layer, features in zip(layers,features):
+        activations.extend([ features ])
+
+    for layer, features in zip(layers,activations):
         print(layer,': ', features.shape)
 
-    activations = features
     return activations
 
 
@@ -49,10 +66,10 @@ if __name__ == '__main__':
             'block5_pool'
             ]
     layers = [
-            'block2_conv1',
+            # 'block2_conv1',
             'block5_conv1',
             'block5_conv2',
             'block5_conv4']
-    input = get_activations(layers)
+    input = get_activations(blocks)
 #print('features size: ',features.shape)
 
