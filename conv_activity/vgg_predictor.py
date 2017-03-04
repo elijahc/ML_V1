@@ -3,8 +3,9 @@ from vgg19 import VGG19
 from keras.preprocessing import image
 from imagenet_utils import preprocess_input
 from keras.models import Model
+from keras.layers import Flatten, Dense, Input
+from keras.layers import Convolution2D, MaxPooling2D
 from keras import backend as K
-from skimage.transform import rescale
 from scipy.ndimage.interpolation import zoom
 
 def DeepOracle(input_tensor=None):
@@ -27,6 +28,10 @@ def DeepOracle(input_tensor=None):
     x = Convolution2D(2, 1, 1, activation='relu', border_mode='same', name='block1_conv3') (x)
     x = Convolution2D(1, 1, 1, activation='relu', border_mode='same', name='block1_conv4') (x)
 
+    x = Flatten(name='flatten')(x)
+    x = Dense(4096, activation='relu', name='fc1')(x)
+    x = Dense(2048, activation='relu', name='fc2')(x)
+    x = Dense(37, activation='relu', name='predictions')(x)
 
 
 def get_activations(layers):
@@ -45,12 +50,13 @@ def get_activations(layers):
         model = Model(input=base_model.input, output=base_model.get_layer(layer).output)
         features = model.predict(x)
 
-        features = zoom(features, [1,8.0,8.0,1])
+        features = zoom(features, [1, 8.0, 8.0, 1])
 
         activations.extend([ features ])
 
-    for layer, features in zip(layers,activations):
-        print(layer,': ', features.shape)
+    import pdb; pdb.set_trace()
+    for layer, features in zip(layers, activations):
+        print(layer, ': ', features.shape)
 
     return activations
 
@@ -70,6 +76,6 @@ if __name__ == '__main__':
             'block5_conv1',
             'block5_conv2',
             'block5_conv4']
-    input = get_activations(blocks)
+    input = get_activations(layers)
 #print('features size: ',features.shape)
 
