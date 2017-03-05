@@ -1,17 +1,38 @@
-# Trained image classification models for Keras
 
-This repository contains code for the following Keras models:
+## conv_activity
+### Rationale
+Recently, making generative models based solely on pre-trained deep convolutional neural nets are capable of inferring complex structures about the images and how we percieve them.
+In some cases even, these pretrained image feature extractions (sometimes called annotations) once trained, have been able to exceed state of the art in some computer vision domains (e.g. [Deep Gaze II](https://arxiv.org/abs/1610.01563) using VGG)
 
-- VGG16
-- VGG19
-- ResNet50
-- Inception v3
-- CRNN for music tagging
+### Design
 
-All architectures are compatible with both TensorFlow and Theano, and upon instantiation the models will be built according to the image dimension ordering set in your Keras configuration file at `~/.keras/keras.json`. For instance, if you have set `image_dim_ordering=tf`, then any model loaded from this repository will get built according to the TensorFlow dimension ordering convention, "Width-Height-Depth".
+| Block 1        | Shape                |
+| -------------- | -------------------- | ------------- |
+| Input: Img     | (224,244,3)          |               |
+| fetch n layers | (14,14,512)          |               |
+| concatenate    | (14,14,1536)         |               |
+| Output: Tensor | (14,14,1536)         |               |
 
-Pre-trained weights can be automatically loaded upon instantiation (`weights='imagenet'` argument in model constructor for all image models, `weights='msd'` for the music tagging model). Weights are automatically downloaded if necessary, and cached locally in `~/.keras/models/`.
 
+| Block 2 (conv) | Shape                |
+| -------------- | -------------------- | ------------- |
+| Conv1 (16,1,1) | (14,14,16)           |               |
+| BatchNorm1     | (14,14,16)           |               |
+| Conv2 (32,1,1) | (14,14,32)           |               |
+| BatchNorm2     | (14,14,32)           |               |
+| Conv3 (2,1,1)  | (14,14,2)            |               |
+| BatchNorm3     | (14,14,2)            |               |
+| Conv4 (1,1,1)  | (14,14,1)            |               |
+
+| Block 3 (fc)   | Shape                |
+| -------------- | -------------------- | ------------- |
+| Flatten        | (196, )              |               |
+| Dense(4096)    | (4096, )             |               |
+| Dense(2048)    | (2048, )             |               |
+| Dense(n)       | (n, )                |               |
+
+### Ideas
+#### 
 ## Examples
 
 ### Classify images
