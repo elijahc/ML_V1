@@ -4,8 +4,11 @@
 Recently, making generative models based solely on pre-trained deep convolutional neural nets are capable of inferring complex structures about the images and how we percieve them.
 In some cases even, these pretrained image feature extractions (sometimes called annotations) once trained, have been able to exceed state of the art in some computer vision domains (e.g. [Deep Gaze II](https://arxiv.org/abs/1610.01563) using VGG)
 
+
 ##### Resources
-- [Using pretrained models for things](pretrained_models_readme.md)
+- [Using pretrained CNN models for things](pretrained_models_readme.md)
+
+
 ##### Design
 
 | Block 1        | Shape                |
