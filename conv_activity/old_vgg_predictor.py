@@ -25,27 +25,10 @@ def DeepOracle(layers, input_tensor=None):
         input_shape = (224, 224, 3)
         # input_shape = np.squeeze(activation_input).shape
 
-    activation_fetchers = []
-    for layer in layers:
-        model = Model(input=base_model.input, output=base_model.get_layer(layer).output)
-        activation_fetchers.extend([ model ])
-
-    def fetch_activations(x):
-        features = []
-        features = [ feature.predict(x) for feature in activation_fetchers ]
-        features = np.concatenate(features, axis=3)
-
-        return features
-
-
-    def fetch_activations_shape(input_shape):
-        return (14,14, len(layers)*512)
-
     # Convolution Architecture
     # Block 1
     model = Sequential()
-    model.add(Lambda(fetch_activations, output_shape=fetch_activations_shape, input_shape=input_shape))
-    model.add(Convolution2D(16, 1, 1, activation='relu', border_mode='same', name='block1_conv1'))
+    model.add(Convolution2D(16, 1, 1, activation='relu', border_mode='same', name='block1_conv1', input_shape=(14,14,3*512)))
     model.add(BatchNormalization(name='block1_bn1'))
     model.add(Convolution2D(32, 1, 1, activation='relu', border_mode='same', name='block1_conv2'))
     model.add(BatchNormalization(name='block1_bn2'))
@@ -71,6 +54,12 @@ def get_activations(base_model, layers):
         activations.extend([ model ])
 
     return activations
+
+def fev(y, y_pred):
+    var = np.power(y-y.mean(), 2).sum()
+    sse = np.power(y-y_pred, 2).sum()
+
+    return 1-(sse/var)
 
 
 if __name__ == '__main__':
@@ -124,13 +113,12 @@ if __name__ == '__main__':
     valid_activations = activations[valid_idxs]
 
     model = DeepOracle(layers)
-    import pdb; pdb.set_trace()
 
     model.compile(
-            optimizer='adam',
+            optimizer='rmsprop',
             loss='mse',
             metrics=[])
 
-    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=10)
+    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=15)
     y_pred = model.predict(valid_activations, batch_size=32)
     print('fev: %.3f' % fev(valid_activity, y_pred))
