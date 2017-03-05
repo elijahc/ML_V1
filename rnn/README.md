@@ -1,9 +1,13 @@
 # RNN
 
 ##### Resources
-- [Predicting sequences of vectors(regression) in Keras using LSTM](http://danielhnyk.cz/predicting-sequences-vectors-keras-using-rnn-lstm/)
-- [TimeDistributed Wrapper in Keras](https://github.com/fchollet/keras/blob/master/keras/layers/wrappers.py#L45)
-### Thoughts moving forward:
+- [Predicting sequences of vectors(regression) in Keras using LSTM](http://danielhnyk.cz/predicting-sequences-vectors-keras-using-rnn-lstm/) (Blog)
+- Using TimeDistributed in Keras
+    - [TimeDistributed vs. TimeDistributedDense](http://stackoverflow.com/questions/42398645/timedistributed-vs-timedistributeddense-keras) (SO)
+    - [TimeDistributed Wrapper in Keras](https://github.com/fchollet/keras/blob/master/keras/layers/wrappers.py#L45) (Source Code)
+    - [On the correct way to use LTSM and TimeDistributedDense for the purpose of times series forecasting](https://groups.google.com/forum/#!topic/keras-users/RY2kJnr-mwk) (Keras Google Group)
+    - [How to replace an Embedding layer with a Time Distributed Dense after training?](http://stackoverflow.com/questions/39532572/how-to-replace-an-embedding-layer-with-a-time-distributed-dense-after-training) (SO)
+### Thoughts moving forward...
 ---
 
 
@@ -31,4 +35,8 @@ RNN's which have a Latent Random Variable at each time step parameterized by the
 - [ Building Autoencoders in Keras ](https://blog.keras.io/building-autoencoders-in-keras.html) (Keras Blog)
 - [Example VAE implementation in keras](https://github.com/fchollet/keras/blob/master/examples/variational_autoencoder.py) (Github)
 - [Theano implementation of VRNN](https://github.com/jych/nips2015_vrnn) from J. Chung et al (Github)
+
+##### References
+- State Dependence of Noise COrrelations in Macaque Primary Visual Cortex - ([Cell](http://www.cell.com/neuron/abstract/S0896-6273(14)00104-4))
+- A Recurrent Latent Variable Model for Sequential Data - ([PDF](https://arxiv.org/pdf/1506.02216))
 ---
