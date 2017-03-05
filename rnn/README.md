@@ -2,7 +2,7 @@
 
 ##### Resources
 - [Predicting sequences of vectors(regression) in Keras using LSTM](http://danielhnyk.cz/predicting-sequences-vectors-keras-using-rnn-lstm/)
-
+- [TimeDistributed Wrapper in Keras](https://github.com/fchollet/keras/blob/master/keras/layers/wrappers.py#L45)
 ### Thoughts moving forward:
 ---
 
