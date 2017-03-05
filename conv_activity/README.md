@@ -31,8 +31,8 @@ In some cases even, these pretrained image feature extractions (sometimes called
 | Dense(2048)    | (2048, )             |               |
 | Dense(n)       | (n, )                |               |
 
-### Ideas
-#### 
+
+
 ## Examples
 
 ### Classify images
