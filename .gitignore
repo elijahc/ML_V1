@@ -98,3 +98,6 @@ data/
 output/
 
 *.h5
+
+# Ignore gitbook local renders
+_book/
