@@ -55,11 +55,9 @@ def get_activations(base_model, layers):
 
     return activations
 
-def fev(y, y_pred):
-    var = np.power(y-y.mean(), 2).sum()
-    sse = np.power(y-y_pred, 2).sum()
-
-    return 1-(sse/var)
+def pairwise_pcc(y,y_pred):
+    ppcc = [ np.corrcoef(y_pred[:,i],y[:,i]) for i in np.arange(37)]
+    return np.array(ppcc)
 
 
 if __name__ == '__main__':
@@ -121,4 +119,4 @@ if __name__ == '__main__':
 
     model.fit(train_activations, train_activity, batch_size=32, nb_epoch=15)
     y_pred = model.predict(valid_activations, batch_size=32)
-    print('fev: %.3f' % fev(valid_activity, y_pred))
+    print('pcc: %.3f' % pairwise_pcc(valid_activity, y_pred))
