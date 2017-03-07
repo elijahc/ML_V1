@@ -15,6 +15,7 @@ from scipy.ndimage.interpolation import zoom
 from skimage.color import gray2rgb
 from skimage.io import imread
 from skimage.transform import resize
+import csv
 
 def DeepOracle(layers, input_tensor=None):
 
@@ -57,7 +58,7 @@ def get_activations(base_model, layers):
 
 def pairwise_pcc(y,y_pred):
     ppcc = [ np.corrcoef(y_pred[:,i],y[:,i]) for i in np.arange(37)]
-    return np.array(ppcc)
+    return np.nan_to_num(np.array(ppcc)[:,1,0])
 
 
 if __name__ == '__main__':
@@ -117,6 +118,23 @@ if __name__ == '__main__':
             loss='mse',
             metrics=[])
 
-    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=15)
+    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=10)
     y_pred = model.predict(valid_activations, batch_size=32)
-    print('pcc: %.3f' % pairwise_pcc(valid_activity, y_pred))
+    ppcc = pairwise_pcc(valid_activity,y_pred)
+    with open('ppcc.csv', 'w') as csvfile:
+        fieldnames = ['ppcc']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for i in np.arange(len(ppcc)):
+            writer.writerow({'ppcc':ppcc[i]})
+
+    with open('evaluation.csv', 'w') as csvfile:
+        fieldnames = ['id','y', 'y_pred', 'neuron']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for i,idx in enumerate(valid_idxs):
+            for n in np.arange(37):
+                writer.writerow({'id':idx, 'y': valid_activity[i,n], 'y_pred':y_pred[i,n], 'neuron':n})
+    print('pcc: %.3f' % ppcc)
