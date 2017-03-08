@@ -11,7 +11,7 @@ def main():
     parser.add_argument('outfile', metavar='outfile', type=str,
                         help='Path to output data')
     parser.add_argument('--data_structure', type=str, default='timeseries', choices=['timeseries','ledger'],
-                        help='Structure to parse the data into default: timeseries')
+                        help='Structure to parse the data into default: ledger')
     parser.add_argument('--format', type=str, default='mat', choices=['mat','hdf5','csv','pickle'],
                         help='File Format to save data default: mat')
 
@@ -22,15 +22,15 @@ def main():
     FILE = FLAGS.infile
 
     print('loading...', FILE)
-    session_1 = sio.loadmat(FILE)
+    mat_file = sio.loadmat(FILE)
 
     #%%
     # Filter out poor quality neurons
-    mask = np.squeeze(session_1['INDCENT']).astype(bool)
+    mask = np.squeeze(mat_file['INDCENT']).astype(bool)
 
-    resp_train = session_1['resp_train'][mask]
+    resp_train = mat_file['resp_train'][mask]
     stim_len = np.size(resp_train,axis=-1)
-    resp_train_blk = session_1['resp_train_blk'][mask]
+    resp_train_blk = mat_file['resp_train_blk'][mask]
     blank_len = np.size(resp_train_blk,axis=-1)
 
     # Shift by 50ms to account for response latency
@@ -39,11 +39,27 @@ def main():
     #resp = np.roll(resp,-latency,3)[:,:,:,:-latency]
 
 
+    resp_nat_sm, resp_nat_lg = subdivide(resp_train)
     stim, spike_train,ids,trial = mutate(resp,stim_len,blank_len,stim_sequence)
+    out_dict = dict(
+            timeseries=spike_train,
+            stim=stim,
+            trial_num=trial,
+            image_id=ids,
+            nat_resp_sm=resp_nat_sm,
+            nat_resp_lg=resp_nat_lg)
 
     outfile = FLAGS.outfile
     print('writing ', outfile, '...')
-    sio.savemat(outfile, {'timeseries':spike_train, 'stim':stim,'trial_num':trial, 'image_id':ids})
+    sio.savemat(outfile, out_dict)
+
+def subdivide(resp):
+    tmp = np.squeeze(resp[:,:(2*9*30),:])
+    import pdb; pdb.set_trace()
+    tmp = tmp.reshape(np.size(resp,0),2,9,30,20,np.size(resp,-1))
+    resp_nat_sm = tmp[:,0,:,:,:]
+    resp_nat_lg = tmp[:,1,:,:,:]
+    return (resp_nat_sm, resp_nat_lg)
 
 def mutate(resp,stim_len,blank_len,stim_sequence):
     image_bin = []
