@@ -144,7 +144,7 @@ if __name__ == '__main__':
         for i in np.arange(len(ppcc)):
             writer.writerow({
                 'ppcc':ppcc[i],
-                'ppcc':ppcc_baseline[i],
+                'ppcc_baseline':ppcc_baseline[i],
                 'si': si[i]
                 })
 
