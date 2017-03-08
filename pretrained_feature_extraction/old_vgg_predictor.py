@@ -15,6 +15,7 @@ from scipy.ndimage.interpolation import zoom
 from skimage.color import gray2rgb
 from skimage.io import imread
 from skimage.transform import resize
+from selectivity import si
 import csv
 
 def DeepOracle(layers, input_tensor=None):
@@ -56,6 +57,11 @@ def get_activations(base_model, layers):
 
     return activations
 
+def gen_y_fake(y, sem_y):
+    loc = np.zeros_like(y)
+    z = np.random.normal(loc,sem_y)
+    return (y + z)
+
 def pairwise_pcc(y,y_pred):
     ppcc = [ np.corrcoef(y_pred[:,i],y[:,i]) for i in np.arange(37)]
     return np.nan_to_num(np.array(ppcc)[:,1,0])
@@ -68,9 +74,8 @@ if __name__ == '__main__':
     print('loading mat data...', mat_file)
     mat_contents = sio.loadmat(mat_file)
     activity_contents = sio.loadmat(activity_file)
-    mean_activity = activity_contents['resp_mean']
-    sem_activity = activity_contents['resp_sem']
-    import pdb; pdb.set_trace()
+    activity = activity_contents['resp_mean'].swapaxes(0,1)
+    sem_activity = activity_contents['resp_sem'].swapaxes(0,1)
 
     # images = mat_contents['images']
     train_frac = 0.8
@@ -125,14 +130,23 @@ if __name__ == '__main__':
 
     model.fit(train_activations, train_activity, batch_size=32, nb_epoch=10)
     y_pred = model.predict(valid_activations, batch_size=32)
+    y_baseline = gen_y_fake(valid_activity, sem_activity[valid_idxs])
+
+    ppcc_baseline = pairwise_pcc(y_baseline, valid_activity)
     ppcc = pairwise_pcc(valid_activity,y_pred)
+
+    si = si(valid_activity)
     with open('ppcc.csv', 'w') as csvfile:
-        fieldnames = ['ppcc']
+        fieldnames = ['ppcc','ppcc_baseline','si']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
         for i in np.arange(len(ppcc)):
-            writer.writerow({'ppcc':ppcc[i]})
+            writer.writerow({
+                'ppcc':ppcc[i],
+                'ppcc':ppcc_baseline[i],
+                'si': si[i]
+                })
 
     with open('evaluation.csv', 'w') as csvfile:
         fieldnames = ['id','y', 'y_pred', 'neuron']
@@ -142,4 +156,6 @@ if __name__ == '__main__':
         for i,idx in enumerate(valid_idxs):
             for n in np.arange(37):
                 writer.writerow({'id':idx, 'y': valid_activity[i,n], 'y_pred':y_pred[i,n], 'neuron':n})
-    print('pcc: %.3f' % ppcc)
+    print('avg_pcc_best: %.3f' % ppcc_baseline.mean())
+    print('avg_pcc: %.3f' % ppcc.mean())
+    print('norm_avg_pcc: %.3f' % (ppcc/ppcc_baseline).mean())

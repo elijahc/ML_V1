@@ -59,7 +59,7 @@ def main():
 
 def trial_stats(resp):
     t_win = np.size(resp, 3)
-    resp = resp.sum(axis=3)/t_win
+    resp = resp.sum(axis=3)
     resp_mean = resp.mean(axis=2)
     resp_std = resp.std(axis=2)
     resp_sem = resp_std/np.sqrt(20)
