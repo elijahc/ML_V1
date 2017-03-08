@@ -36,10 +36,10 @@ def main():
     # Shift by 50ms to account for response latency
     latency = 50
     resp = np.concatenate((resp_train,resp_train_blk), axis=3)
-    #resp = np.roll(resp,-latency,3)[:,:,:,:-latency]
+    resp = np.roll(resp,-latency,3)[:,:,:,:-latency]
 
 
-    resp_nat_sm, resp_nat_lg = subdivide(resp_train)
+    resp_nat_sm, resp_nat_lg = subdivide(resp[:,:,:,:50])
     stim, spike_train,ids,trial = mutate(resp,stim_len,blank_len,stim_sequence)
     out_dict = dict(
             timeseries=spike_train,
@@ -55,10 +55,9 @@ def main():
 
 def subdivide(resp):
     tmp = np.squeeze(resp[:,:(2*9*30),:])
-    import pdb; pdb.set_trace()
     tmp = tmp.reshape(np.size(resp,0),2,9,30,20,np.size(resp,-1))
-    resp_nat_sm = tmp[:,0,:,:,:]
-    resp_nat_lg = tmp[:,1,:,:,:]
+    resp_nat_sm = tmp[:,0,:,:,:].reshape(np.size(tmp,0),(9*30),20,np.size(tmp,-1))
+    resp_nat_lg = tmp[:,1,:,:,:].reshape(np.size(tmp,0),(9*30),20,np.size(tmp,-1))
     return (resp_nat_sm, resp_nat_lg)
 
 def mutate(resp,stim_len,blank_len,stim_sequence):
