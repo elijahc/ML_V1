@@ -64,9 +64,13 @@ def pairwise_pcc(y,y_pred):
 if __name__ == '__main__':
 
     mat_file = '../data/02mean_d1.mat'
+    activity_file = '../data/02_stats.mat'
     print('loading mat data...', mat_file)
     mat_contents = sio.loadmat(mat_file)
-    activity = mat_contents['activity']
+    activity_contents = sio.loadmat(activity_file)
+    mean_activity = activity_contents['resp_mean']
+    sem_activity = activity_contents['resp_sem']
+    import pdb; pdb.set_trace()
 
     # images = mat_contents['images']
     train_frac = 0.8

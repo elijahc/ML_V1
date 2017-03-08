@@ -39,19 +39,31 @@ def main():
     resp = np.roll(resp,-latency,3)[:,:,:,:-latency]
 
 
-    resp_nat_sm, resp_nat_lg = subdivide(resp[:,:,:,:50])
+    resp_mean, resp_std, resp_sem = trial_stats(resp)
+    #resp_nat_sm, resp_nat_lg = subdivide(resp[:,:,:,:50])
     stim, spike_train,ids,trial = mutate(resp,stim_len,blank_len,stim_sequence)
     out_dict = dict(
             timeseries=spike_train,
+            resp_mean=resp_mean,
+            resp_std=resp_std,
+            resp_sem=resp_sem,
+            #nat_resp_sm=resp_nat_sm,
+            #nat_resp_lg=resp_nat_lg,
             stim=stim,
             trial_num=trial,
-            image_id=ids,
-            nat_resp_sm=resp_nat_sm,
-            nat_resp_lg=resp_nat_lg)
+            image_id=ids)
 
     outfile = FLAGS.outfile
     print('writing ', outfile, '...')
     sio.savemat(outfile, out_dict)
+
+def trial_stats(resp):
+    t_win = np.size(resp, 3)
+    resp = resp.sum(axis=3)/t_win
+    resp_mean = resp.mean(axis=2)
+    resp_std = resp.std(axis=2)
+    resp_sem = resp_std/np.sqrt(20)
+    return (resp_mean, resp_std, resp_sem)
 
 def subdivide(resp):
     tmp = np.squeeze(resp[:,:(2*9*30),:])
