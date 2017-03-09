@@ -82,7 +82,10 @@ if __name__ == '__main__':
 
     base_model = VGG19(weights='imagenet')
     base_model_layers = [ layer.name for layer in base_model.layers[1:-5] ]
+
+    # DeepGaze II layers
     layers = np.array(base_model_layers)[[16, 17, 19]]
+
     print('extracting layers:')
     print(layers)
 
@@ -90,10 +93,14 @@ if __name__ == '__main__':
     # idxs = np.arange(956)
 
     # Small Natural Images
+    # idxs = np.arange(540)[::2]
+
+    # Small Natural Images and gratings
     idxs = np.arange(540)[::2]
+    idxs = np.concatenate([idxs, np.arange(540,732)])
 
 
-
+    # Randomize indices and partition
     idxs = np.random.permutation(idxs)
     c = round(len(idxs)*train_frac)
     train_idxs = idxs[:c]
@@ -128,6 +135,7 @@ if __name__ == '__main__':
 
     f.close()
     activations = np.concatenate(activations, axis=3)
+
     train_activations = activations[train_idxs]
     valid_activations = activations[valid_idxs]
 
@@ -138,7 +146,7 @@ if __name__ == '__main__':
             loss='mse',
             metrics=[])
 
-    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=10)
+    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=30)
     y_pred = model.predict(valid_activations, batch_size=32)
     y_baseline = gen_y_fake(valid_activity, sem_activity[valid_idxs])
 
