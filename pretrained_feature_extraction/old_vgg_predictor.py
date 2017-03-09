@@ -30,7 +30,7 @@ def DeepOracle(layers, input_tensor=None):
     # Convolution Architecture
     # Block 1
     model = Sequential()
-    model.add(Convolution2D(16, 1, 1, activation='relu', border_mode='same', name='block1_conv1', input_shape=(14,14,3*512)))
+    model.add(Convolution2D(16, 1, 1, activation='relu', border_mode='same', name='block1_conv1', input_shape=(28,28,3*512)))
     model.add(BatchNormalization(name='block1_bn1'))
     model.add(Convolution2D(32, 1, 1, activation='relu', border_mode='same', name='block1_conv2'))
     model.add(BatchNormalization(name='block1_bn2'))
@@ -86,6 +86,8 @@ if __name__ == '__main__':
     # DeepGaze II layers
     layers = np.array(base_model_layers)[[16, 17, 19]]
 
+    layers = np.random.choice(base_model_layers[-9:],3,replace=False)
+
     print('extracting layers:')
     print(layers)
 
@@ -101,16 +103,17 @@ if __name__ == '__main__':
 
 
     # Randomize indices and partition
-    idxs = np.random.permutation(idxs)
+    randomized_idxs = np.random.permutation(idxs)
     c = round(len(idxs)*train_frac)
-    train_idxs = idxs[:c]
-    valid_idxs = idxs[c:]
+    train_idxs = randomized_idxs[:c]
+    valid_idxs = randomized_idxs[c:]
 
     train_activity = activity[train_idxs]
     valid_activity = activity[valid_idxs]
 
     f = h5py.File('../data/02activations.hdf5', 'r+')
     activations = []
+    target_scale = 28
     for layer in layers:
         layer_activation = []
         try:
@@ -131,9 +134,12 @@ if __name__ == '__main__':
             print('caching ',layer,'...')
             f.create_dataset('activations/'+layer, data=activations)
             pass
+        sc_fac = target_scale//layer_activation.shape[1]
+        layer_activation = zoom(layer_activation, (1,sc_fac,sc_fac,1), order=0)
         activations.extend([ layer_activation ])
 
     f.close()
+
     activations = np.concatenate(activations, axis=3)
 
     train_activations = activations[train_idxs]
