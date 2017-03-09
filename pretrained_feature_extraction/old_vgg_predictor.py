@@ -86,38 +86,48 @@ if __name__ == '__main__':
     print('extracting layers:')
     print(layers)
 
-    idxs = np.random.permutation(np.arange(956))
-    c = round(956*train_frac)
+    # All images
+    # idxs = np.arange(956)
+
+    # Small Natural Images
+    idxs = np.arange(540)[::2]
+
+
+
+    idxs = np.random.permutation(idxs)
+    c = round(len(idxs)*train_frac)
     train_idxs = idxs[:c]
     valid_idxs = idxs[c:]
 
     train_activity = activity[train_idxs]
     valid_activity = activity[valid_idxs]
 
-    for i in layers:
+    f = h5py.File('../data/02activations.hdf5', 'r+')
+    activations = []
+    for layer in layers:
+        layer_activation = []
         try:
-            f = h5py.File('../data/02activations.hdf5', 'r')
-            activations = f['activations'][:]
-            f.close()
+            print('extracting ',layer, ' from cache...')
+            layer_activation = f['activations/'+layer][:]
         except:
+            print(layer,' not in cache, rebuilding from source...')
             images = [ cv2.resize(cv2.imread('../data/images/%g.jpg'%id),(224,224)).astype(np.float32) for id in tqdm(np.arange(956),desc='loading images') ]
             images = np.array(images)
 
-            train_images = images[train_idxs]
-            valid_images = images[valid_idxs]
-
-            activation_fetchers = get_activations(base_model, layers)
+            activation_fetcher = get_activation(base_model, layer)
             for img in tqdm(images):
                 img = np.expand_dims(img, axis=0)
-                features = [ feature.predict(img) for feature in activation_fetchers ]
-                features = np.concatenate(features, axis=3)
-                activations.extend([ features ])
+                feature = activation_fetcher.predict(img)
+                layer_activation.extend([ feature ])
 
-            activations = np.concatenate(activations, axis=0)
-            f = h5py.File('../data/02activations.hdf5', 'w')
-            f.create_dataset('activations', data=activations)
-            f.close()
+            layer_activation = np.concatenate(layer_activation, axis=0)
+            print('caching ',layer,'...')
+            f.create_dataset('activations/'+layer, data=activations)
             pass
+        activations.extend([ layer_activation ])
+
+    f.close()
+    activations = np.concatenate(activations, axis=3)
     train_activations = activations[train_idxs]
     valid_activations = activations[valid_idxs]
 

@@ -40,8 +40,9 @@ def main():
 
 
     resp_mean, resp_std, resp_sem = trial_stats(resp)
-    #resp_nat_sm, resp_nat_lg = subdivide(resp[:,:,:,:50])
+    resp_nat_sm, resp_nat_lg = subdivide(resp[:,:,:,:50])
     stim, spike_train,ids,trial = mutate(resp,stim_len,blank_len,stim_sequence)
+    import pdb; pdb.set_trace()
     out_dict = dict(
             timeseries=spike_train,
             resp_mean=resp_mean,
