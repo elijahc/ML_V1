@@ -87,8 +87,8 @@ if __name__ == '__main__':
     # DeepGaze II layers
     # layers = np.array(base_model_layers)[[16, 17, 19]]
 
-    # layers = np.random.choice(base_model_layers[-9:],3,replace=False)
-    layers = np.random.choice(block4,3,replace=False)
+    layers = np.random.choice(base_model_layers[-9:],3,replace=False)
+    # layers = np.random.choice(block4,3,replace=False)
 
     print('extracting layers:')
     print(layers)
@@ -123,11 +123,11 @@ if __name__ == '__main__':
             layer_activation = f['activations/'+layer][:]
         except:
             print(layer,' not in cache, rebuilding from source...')
-            images = [ cv2.resize(cv2.imread('../data/images/%g.jpg'%id),(224,224)).astype(np.float32) for id in tqdm(np.arange(956),desc='loading images') ]
+            images = [ cv2.resize(cv2.imread('../data/images/%g.jpg'%id),(224,224)).astype(np.float32) for id in np.arange(956) ]
             images = np.array(images)
 
             activation_fetcher = get_activation(base_model, layer)
-            layer_activation = activation_fetcher.predict(images,batch_size=128,verbose=1)
+            layer_activation = activation_fetcher.predict(images,batch_size=32,verbose=1)
             # for img in tqdm(images):
             #     img = np.expand_dims(img, axis=0)
             #     layer_activation.extend([ feature ])
