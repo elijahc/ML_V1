@@ -98,3 +98,5 @@ data/
 output/
 
 *.h5
+
+.DS_Store
