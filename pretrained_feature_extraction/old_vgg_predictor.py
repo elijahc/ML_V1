@@ -18,7 +18,7 @@ from skimage.transform import resize
 from selectivity import si
 import csv
 
-def DeepOracle(layers, input_tensor=None):
+def DeepOracle(layers, target_shape):
 
     # Determine proper input shape
     if K.image_dim_ordering() == 'th':
@@ -30,7 +30,7 @@ def DeepOracle(layers, input_tensor=None):
     # Convolution Architecture
     # Block 1
     model = Sequential()
-    model.add(Convolution2D(16, 1, 1, activation='relu', border_mode='same', name='block1_conv1', input_shape=(28,28,3*512)))
+    model.add(Convolution2D(16, 1, 1, activation='relu', border_mode='same', name='block1_conv1', input_shape=target_shape))
     model.add(BatchNormalization(name='block1_bn1'))
     model.add(Convolution2D(32, 1, 1, activation='relu', border_mode='same', name='block1_conv2'))
     model.add(BatchNormalization(name='block1_bn2'))
@@ -66,6 +66,16 @@ def pairwise_pcc(y,y_pred):
     ppcc = [ np.corrcoef(y_pred[:,i],y[:,i]) for i in np.arange(37)]
     return np.nan_to_num(np.array(ppcc)[:,1,0])
 
+def train_test(idxs, frac):
+    # Randomize indices and partition
+    randomized_idxs = np.random.permutation(idxs)
+    c = round(len(idxs)*train_frac)
+    train_idxs = randomized_idxs[:c]
+    valid_idxs = randomized_idxs[c:]
+
+    return (train_idxs, valid_idxs)
+
+
 
 if __name__ == '__main__':
 
@@ -80,19 +90,6 @@ if __name__ == '__main__':
     # images = mat_contents['images']
     train_frac = 0.8
 
-    base_model = VGG19(weights='imagenet')
-    base_model_layers = [ layer.name for layer in base_model.layers[1:-5] ]
-    block4 = ['block4_conv3', 'block4_conv1', 'block4_conv2', 'block4_conv4', 'block4_pool']
-
-    # DeepGaze II layers
-    # layers = np.array(base_model_layers)[[16, 17, 19]]
-
-    layers = np.random.choice(base_model_layers[-9:],3,replace=False)
-    # layers = np.random.choice(block4,3,replace=False)
-
-    print('extracting layers:')
-    print(layers)
-
     # All images
     # idxs = np.arange(956)
 
@@ -103,19 +100,24 @@ if __name__ == '__main__':
     idxs = np.arange(540)[::2]
     idxs = np.concatenate([idxs, np.arange(540,732)])
 
+    kfold_sets = [ train_test(idxs, train_frac) for _ in np.arange(5) ]
 
-    # Randomize indices and partition
-    randomized_idxs = np.random.permutation(idxs)
-    c = round(len(idxs)*train_frac)
-    train_idxs = randomized_idxs[:c]
-    valid_idxs = randomized_idxs[c:]
+    base_model = VGG19(weights='imagenet')
+    base_model_layers = [ layer.name for layer in base_model.layers[1:-5] ]
+    block4 = ['block4_conv3', 'block4_conv1', 'block4_conv2', 'block4_conv4', 'block4_pool']
 
-    train_activity = activity[train_idxs]
-    valid_activity = activity[valid_idxs]
+    # DeepGaze II layers
+    # layers = np.array(base_model_layers)[[16, 17, 19]]
+
+    # layers = np.random.choice(base_model_layers[-9:],3,replace=False)
+    layers = np.random.choice(block4,3,replace=False)
+
+    print('extracting layers:')
+    print(layers)
 
     f = h5py.File('../data/02activations.hdf5', 'r+')
     activations = []
-    target_scale = 28
+    target_scale = (956,28,28,256)
     for layer in layers:
         layer_activation = []
         try:
@@ -136,43 +138,56 @@ if __name__ == '__main__':
             print('caching ',layer,'...')
             f.create_dataset('activations/'+layer, data=layer_activation)
             pass
-        sc_fac = target_scale//layer_activation.shape[1]
-        if sc_fac > 1:
-            layer_activation = zoom(layer_activation, (1,sc_fac,sc_fac,1), order=0)
+        sc_fac = tuple(list(np.array(target_scale)/np.array(layer_activation.shape)))
+        layer_activation = zoom(layer_activation, sc_fac, order=0)
         activations.extend([ layer_activation ])
 
     f.close()
 
     activations = np.concatenate(activations, axis=3)
 
-    train_activations = activations[train_idxs]
-    valid_activations = activations[valid_idxs]
+    y_pred_list = []
+    ppcc_list = []
+    ppcc_baseline_list = []
+    for train_idxs, valid_idxs in kfold_sets:
+        train_activity = activity[train_idxs]
+        valid_activity = activity[valid_idxs]
 
-    model = DeepOracle(layers)
+        train_activations = activations[train_idxs]
+        valid_activations = activations[valid_idxs]
 
-    model.compile(
-            optimizer='adam',
-            loss='mse',
-            metrics=[])
 
-    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=20)
-    y_pred = model.predict(valid_activations, batch_size=32)
-    y_baseline = gen_y_fake(valid_activity, sem_activity[valid_idxs])
+        model = DeepOracle(layers, activations.shape[1:])
 
-    ppcc_baseline = pairwise_pcc(y_baseline, valid_activity)
-    ppcc = pairwise_pcc(valid_activity,y_pred)
+        model.compile(
+                optimizer='adam',
+                loss='mse',
+                metrics=[])
 
-    si = si(valid_activity)
-    with open('ppcc.csv', 'w') as csvfile:
-        fieldnames = ['ppcc','ppcc_baseline','si']
+        model.fit(train_activations, train_activity, batch_size=32, nb_epoch=20)
+        y_pred = model.predict(valid_activations, batch_size=32)
+        y_baseline = gen_y_fake(valid_activity, sem_activity[valid_idxs])
+
+        ppcc_baseline = pairwise_pcc(y_baseline, valid_activity)
+        ppcc = pairwise_pcc(valid_activity,y_pred)
+        y_pred_list.extend([y_pred])
+        ppcc_list.extend([ppcc])
+        ppcc_baseline_list.extend([ ppcc_baseline ])
+
+        #si = si(valid_activity)
+
+    ppcc = np.array(ppcc_list).mean(axis=0)
+    ppcc_baseline = np.array(ppcc_baseline_list).mean(axis=0)
+
+    with open('ppcc_block4.csv', 'w') as csvfile:
+        fieldnames = ['ppcc','ppcc_baseline']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
         for i in np.arange(len(ppcc)):
             writer.writerow({
                 'ppcc':ppcc[i],
-                'ppcc_baseline':ppcc_baseline[i],
-                'si': si[i]
+                'ppcc_baseline':ppcc_baseline[i]
                 })
 
     with open('evaluation.csv', 'w') as csvfile:
