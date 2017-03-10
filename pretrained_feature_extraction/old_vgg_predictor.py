@@ -82,11 +82,13 @@ if __name__ == '__main__':
 
     base_model = VGG19(weights='imagenet')
     base_model_layers = [ layer.name for layer in base_model.layers[1:-5] ]
+    block4 = ['block4_conv3', 'block4_conv1', 'block4_conv2', 'block4_conv4', 'block4_pool']
 
     # DeepGaze II layers
-    layers = np.array(base_model_layers)[[16, 17, 19]]
+    # layers = np.array(base_model_layers)[[16, 17, 19]]
 
-    layers = np.random.choice(base_model_layers[-9:],3,replace=False)
+    # layers = np.random.choice(base_model_layers[-9:],3,replace=False)
+    layers = np.random.choice(block4,3,replace=False)
 
     print('extracting layers:')
     print(layers)
@@ -125,17 +127,18 @@ if __name__ == '__main__':
             images = np.array(images)
 
             activation_fetcher = get_activation(base_model, layer)
-            for img in tqdm(images):
-                img = np.expand_dims(img, axis=0)
-                feature = activation_fetcher.predict(img)
-                layer_activation.extend([ feature ])
+            layer_activation = activation_fetcher.predict(images,batch_size=128,verbose=1)
+            # for img in tqdm(images):
+            #     img = np.expand_dims(img, axis=0)
+            #     layer_activation.extend([ feature ])
 
-            layer_activation = np.concatenate(layer_activation, axis=0)
+            # layer_activation = np.concatenate(layer_activation, axis=0)
             print('caching ',layer,'...')
-            f.create_dataset('activations/'+layer, data=activations)
+            f.create_dataset('activations/'+layer, data=layer_activation)
             pass
         sc_fac = target_scale//layer_activation.shape[1]
-        layer_activation = zoom(layer_activation, (1,sc_fac,sc_fac,1), order=0)
+        if sc_fac > 1:
+            layer_activation = zoom(layer_activation, (1,sc_fac,sc_fac,1), order=0)
         activations.extend([ layer_activation ])
 
     f.close()
@@ -148,11 +151,11 @@ if __name__ == '__main__':
     model = DeepOracle(layers)
 
     model.compile(
-            optimizer='rmsprop',
+            optimizer='adam',
             loss='mse',
             metrics=[])
 
-    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=30)
+    model.fit(train_activations, train_activity, batch_size=32, nb_epoch=20)
     y_pred = model.predict(valid_activations, batch_size=32)
     y_baseline = gen_y_fake(valid_activity, sem_activity[valid_idxs])
 
