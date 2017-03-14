@@ -16,8 +16,8 @@ def si(activity):
     return np.array(si)
 
 if __name__ == '__main__':
-    mat_content = sio.loadmat('../data/02mean_d1.mat')
-    activity = mat_content['activity']
+    mat_content = sio.loadmat('../data/02_stats.mat')
+    activity = mat_content['resp_mean']
     si = si(activity)
 
     with open('selectivity_all.csv', 'w') as csvfile:
