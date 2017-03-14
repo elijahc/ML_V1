@@ -1,4 +1,5 @@
 from sklearn.base import BaseEstimator
+from sklearn.metrics import explained_variance_score as fev
 
 from deeporacle import DeepOracle
 
@@ -19,10 +20,11 @@ class DeepOracleRegressor(BaseEstimator):
         return self
 
     def predict(self, X, **kwargs):
-        self.model.predict(X)
+        return self.model.predict(X)
 
-        return self
-
+    def score(self, X, y, **kwargs):
+        y_pred = self.predict(X, **kwargs)
+        return fev(y, y_pred, multioutput='raw_values')
 
 if __name__ == '__main__':
 
