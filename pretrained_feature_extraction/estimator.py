@@ -24,8 +24,9 @@ class DeepOracleRegressor(BaseEstimator, RegressorMixin):
                 loss=self.loss)
 
     def fit(self, X, y, **kwargs):
-        if self.layers is None:
-            self.layers = [self.layer_1, self.layer_2, self.layer_3]
+        new_layers = [self.layer_1, self.layer_2, self.layer_3]
+        if self.layers != new_layers:
+            self.layers = new_layers
             self.activations = build(self.layers, self.target_scale)
 
         self.model.fit(self.activations[X], self.all_activity[y], nb_epoch=round(self.nb_epoch), **kwargs)
