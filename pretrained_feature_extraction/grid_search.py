@@ -1,82 +1,66 @@
 import numpy as np
 import scipy.io as sio
-import h5py
 from vgg19 import VGG19
-from keras.wrappers.scikit_learn import KerasRegressor
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import KFold
-from sklearn.metrics import make_scorer
-from sklearn.pipeline import Pipeline
-from vgg_predictor import DeepOracle, fev
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from estimator import DeepOracleRegressor
+from deeporacle import train_test, build_random
 
-def baseline_model():
-    print('extracting layers:')
-    print(layers)
-
-    model = DeepOracle(layers)
-
-    model.compile(
-            optimizer='adam',
-            loss='mse',
-            metrics=[])
-
-    return model
+import scipy.stats as stats
 
 if __name__ == '__main__':
-    mat_content = sio.loadmat('../data/02mean_d1.mat')
-    activation_model = VGG19(weights='imagenet')
-    activations = []
-    try:
-        f = h5py.File('../data/02activations.hdf5', 'r')
-        activations = f['activations'][:]
-        f.close()
-    except:
-        images = [ cv2.resize(cv2.imread('../data/images/%g.jpg'%id),(224,224)).astype(np.float32) for id in tqdm(np.arange(956),desc='loading images') ]
-        images = np.array(images)
+    mat_file = '../data/02mean_d1.mat'
+    activity_file = '../data/02_stats.mat'
+    print('loading mat data...', mat_file)
+    mat_contents = sio.loadmat(mat_file)
+    # activity_contents = sio.loadmat(activity_file)
+    activity = mat_contents['activity']
+    # sem_activity = activity_contents['resp_sem'].swapaxes(0,1)
 
-        train_images = images[train_idxs]
-        valid_images = images[valid_idxs]
+    # Small Natural Images and gratings
+    idxs = np.arange(540)[::2]
+    idxs = np.concatenate([idxs, np.arange(540,732)])
 
-        activation_fetchers = get_activations(base_model, layers)
-        for img in tqdm(images):
-            img = np.expand_dims(img, axis=0)
-            features = [ feature.predict(img) for feature in activation_fetchers ]
-            features = np.concatenate(features, axis=3)
-            activations.extend([ features ])
+    idxs_train, idxs_test = train_test(idxs, 0.8)
+    block3 = ['block3_conv1', 'block3_conv2', 'block3_conv3', 'block3_conv4']
+    block4 = ['block4_conv1', 'block4_conv2', 'block4_conv3', 'block4_conv4']
+    block5 = ['block5_conv1', 'block5_conv2', 'block5_conv3', 'block5_conv4']
+    all_blocks = []
+    all_blocks.extend(block3)
+    all_blocks.extend(block4)
+    all_blocks.extend(block5)
 
-        activations = np.concatenate(activations, axis=0)
-        f = h5py.File('../data/02activations.hdf5', 'w')
-        f.create_dataset('activations', data=activations)
-        f.close()
-        pass
-    X = activations
-    Y = mat_content['activity']
-    seed = 7
-    np.random.seed(seed)
+    #layers, activations = build_random(using=block5, choose=3, target_scale=(956,56,56,128))
 
-    base_model = VGG19(weights='imagenet')
-    base_model_layers = [ layer.name for layer in base_model.layers[1:-5] ]
-    layers = np.array(base_model_layers)[[16, 17, 19]]
+    #X_train = activations[idxs]
+    #y_train = activity[idxs]
 
-    sk_params = dict(
-            nb_epoch=100,
-            batch_size=32,
-            verbose=0,
-            layers=layers
-            )
+    dor = DeepOracleRegressor(all_activity=activity)
+    param_grid = {'batch_size': [8,16,32,64,128]}
+    layer_param_grid = {
+            'layer_1': all_blocks,
+            'layer_2': all_blocks,
+            'layer_3': all_blocks,
+            'all_activity':[activity]}
+    clf = RandomizedSearchCV(dor, layer_param_grid, fit_params={'batch_size':64}, verbose=1, cv=5, n_jobs=1, n_iter=5)
+    clf.fit(idxs_train, idxs_train)
 
-    scorer = make_scorer(fev, greater_is_better=True)
-    estimator = KerasRegressor(build_fn=baseline_model, **sk_params)
-    kf = KFold(n_splits=10,shuffle=True,random_state=seed)
+    print('Best Parameter set found on development set:')
+    print()
+    print(clf.best_params_)
+    print()
+    print('Grid scores on development set:')
+    print()
+    means = clf.cv_results_['mean_test_score']
+    stds = clf.cv_results_['std_test_score']
+    for mean, std, params in zip(means, stds, clf.cv_results_['params']):
+        print("%0.3f (+/-%0.03f) for %r" % (mean, std * 2, params))
 
-    fev_vec = []
-    # for train_index, test_index in kf.split(X):
-    #     print('TRAIN:', train_index.shape, ' TEST:', test_index.shape)
-    #     X_train, X_test = X[train_index], X[test_index]
-    #     y_train, y_test = Y[train_index], Y[test_index]
-    #     model = baseline_model(layers)
-    #     model.fit(X_train, y_train, nb_epoch=10, batch_size=32)
-    #     y_pred = model.predict(X_test)
-    #     fev_vec.extend([ fev(y_test, y_pred) ])
-    #     print(np.array(fev_vec).mean())
-    results = cross_val_score(estimator, X, Y, cv=kf, scoring=scorer, verbose=10)
+    import pdb; pdb.set_trace()
+    for split, batch_size in zip(['split'+str(n)+'_test_score' for n in np.arange(5)], [8,16,32,64,128]):
+        for val in clf.cv_results_[split]:
+            print("%g, %0.03f" % (batch_size, val))
+
+
+    print()
+
+    import pdb; pdb.set_trace()

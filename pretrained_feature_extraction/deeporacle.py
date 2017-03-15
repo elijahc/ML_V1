@@ -16,6 +16,8 @@ from skimage.color import gray2rgb
 from skimage.io import imread
 from skimage.transform import resize
 from selectivity import si
+from sklearn.base import BaseEstimator
+from sklearn.metrics import explained_variance_score as fev
 import csv
 
 def DeepOracle(target_shape=(14,14,512*3)):
@@ -74,17 +76,21 @@ def pairwise_pcc(y,y_pred):
 def train_test(idxs, frac):
     # Randomize indices and partition
     randomized_idxs = np.random.permutation(idxs)
-    c = round(len(idxs)*train_frac)
+    c = round(len(idxs)*frac)
     train_idxs = randomized_idxs[:c]
     valid_idxs = randomized_idxs[c:]
 
     return (train_idxs, valid_idxs)
 
 def build_random(using=None, choose=3, target_scale=None):
-
     # layers = np.random.choice(base_model_layers[-14:],3,replace=False)
     layers = np.random.choice(using,choose,replace=False)
 
+    return (layers, build(layers=layers, target_scale=target_scale))
+
+def build(layers=None, target_scale=None):
+
+    base_model = VGG19(weights='imagenet')
     print('extracting layers:')
     print(layers)
 
@@ -118,7 +124,7 @@ def build_random(using=None, choose=3, target_scale=None):
 
     activations = np.concatenate(activations, axis=3)
 
-    return layers, activations
+    return activations
 
 def eval_network(kfold_sets, activations):
     y_pred_list = []
@@ -155,7 +161,6 @@ def eval_network(kfold_sets, activations):
 
     return ppcc_list
 
-
 if __name__ == '__main__':
 
     mat_file = '../data/02mean_d1.mat'
@@ -182,7 +187,6 @@ if __name__ == '__main__':
     kfold_sets = [ train_test(idxs, train_frac) for _ in np.arange(5) ]
     target_scale = (956,56,56,128)
 
-    base_model = VGG19(weights='imagenet')
     base_model_layers = [ layer.name for layer in base_model.layers[1:-5] ]
 
     # DeepGaze II layers
