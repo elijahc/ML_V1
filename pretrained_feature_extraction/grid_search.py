@@ -1,19 +1,61 @@
 import numpy as np
+import gc
 import scipy.io as sio
 from vgg19 import VGG19
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from estimator import DeepOracleRegressor
-from deeporacle import train_test, build_random
+from deeporacle import train_test, build
+import itertools
+import csv
 
 import scipy.stats as stats
 
+def train(layers):
+    target_scale = (956,14,14,512)
+    activations = build(layers, target_scale)
+
+    X_train = activations[idxs]
+    y_train = activity[idxs]
+
+    dor = DeepOracleRegressor(all_activity=activity)
+
+    param_grid = {'batch_size': [64]}
+
+    clf = GridSearchCV(dor, param_grid, verbose=1, cv=5, n_jobs=1)
+    clf.fit(X_train, y_train)
+    activations=None
+    del activations, X_train, y_train
+    gc.collect()
+
+    import pdb; pdb.set_trace()
+    return clf
+
+def print_out(clf, layers):
+    print('Best Parameter set found on development set:')
+    print()
+    print(clf.best_params_)
+    print()
+    print('Grid scores on development set:')
+    print()
+    means = clf.cv_results_['mean_test_score']
+    stds = clf.cv_results_['std_test_score']
+
+    print()
+    print('writing to csv...')
+    with open('all_blocks_early.csv', 'a') as csvfile:
+        writer = csv.writer(csvfile)
+
+        for mean, std, params in zip(means, stds, clf.cv_results_['params']):
+            print("%0.3f (+/-%0.03f) for %r" % (mean, std * 2, list(layers)))
+            writer.writerow([layers, params, mean, std*2])
+
 if __name__ == '__main__':
     mat_file = '../data/02mean_d1.mat'
-    activity_file = '../data/02_stats.mat'
+    activity_file = '../data/02_stats_early.mat'
     print('loading mat data...', mat_file)
     mat_contents = sio.loadmat(mat_file)
-    # activity_contents = sio.loadmat(activity_file)
-    activity = mat_contents['activity']
+    activity_contents = sio.loadmat(activity_file)
+    activity = activity_contents['resp_mean'].swapaxes(0,1)
     # sem_activity = activity_contents['resp_sem'].swapaxes(0,1)
 
     # Small Natural Images and gratings
@@ -29,38 +71,11 @@ if __name__ == '__main__':
     all_blocks.extend(block4)
     all_blocks.extend(block5)
 
-    #layers, activations = build_random(using=block5, choose=3, target_scale=(956,56,56,128))
+    combos = [e for e in itertools.combinations(all_blocks, 3)]
 
-    #X_train = activations[idxs]
-    #y_train = activity[idxs]
+    for layers in combos:
 
-    dor = DeepOracleRegressor(all_activity=activity)
-    param_grid = {'batch_size': [8,16,32,64,128]}
-    layer_param_grid = {
-            'layer_1': all_blocks,
-            'layer_2': all_blocks,
-            'layer_3': all_blocks,
-            'all_activity':[activity]}
-    clf = RandomizedSearchCV(dor, layer_param_grid, fit_params={'batch_size':64}, verbose=1, cv=5, n_jobs=1, n_iter=5)
-    clf.fit(idxs_train, idxs_train)
+        clf = train(list(layers))
+        print_out(clf, layers)
 
-    print('Best Parameter set found on development set:')
-    print()
-    print(clf.best_params_)
-    print()
-    print('Grid scores on development set:')
-    print()
-    means = clf.cv_results_['mean_test_score']
-    stds = clf.cv_results_['std_test_score']
-    for mean, std, params in zip(means, stds, clf.cv_results_['params']):
-        print("%0.3f (+/-%0.03f) for %r" % (mean, std * 2, params))
-
-    import pdb; pdb.set_trace()
-    for split, batch_size in zip(['split'+str(n)+'_test_score' for n in np.arange(5)], [8,16,32,64,128]):
-        for val in clf.cv_results_[split]:
-            print("%g, %0.03f" % (batch_size, val))
-
-
-    print()
-
-    import pdb; pdb.set_trace()
+    # clf = RandomizedSearchCV(dor, layer_param_grid, fit_params={'batch_size':32}, verbose=1, cv=5, n_jobs=1, n_iter=20)

@@ -36,11 +36,11 @@ def main():
     # Shift by 50ms to account for response latency
     latency = 50
     resp = np.concatenate((resp_train,resp_train_blk), axis=3)
-    #resp = np.roll(resp,-latency,3)[:,:,:,:-latency]
+    resp = np.roll(resp,-latency,3)[:,:,:,:-latency]
 
 
-    resp_mean, resp_std, resp_sem = trial_stats(resp)
-    resp_nat_sm, resp_nat_lg = subdivide(resp[:,:,:,50:105])
+    resp_mean, resp_std, resp_sem = trial_stats(resp[:,:,:,55:110])
+    #resp_nat_sm, resp_nat_lg = subdivide(resp[:,:,:,50:105])
     stim, spike_train,ids,trial = mutate(resp,stim_len,blank_len,stim_sequence)
     out_dict = dict(
             timeseries=spike_train,

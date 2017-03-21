@@ -17,10 +17,11 @@ def si(activity):
 
 if __name__ == '__main__':
     mat_content = sio.loadmat('../data/02_stats.mat')
-    activity = mat_content['resp_mean']
+    activity = mat_content['resp_mean'].T
+    idxs = np.arange(540)[::2]
     si = si(activity)
 
-    with open('selectivity_all.csv', 'w') as csvfile:
+    with open('selectivity_edc.csv', 'w') as csvfile:
         fieldnames = ['neuron','si']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
