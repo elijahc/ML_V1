@@ -33,24 +33,16 @@ def DeepOracle(target_shape=(14,14,512*3)):
     # Convolution Architecture
     # Block 1
     model = Sequential()
-    model.add(Convolution2D(16, (1, 1), activation='relu', padding='same',
-        name='block1_conv1', input_shape=target_shape))
+    # model.add(Convolution2D(2, (1, 1), activation='relu', padding='same',
+    #     name='block1_conv1', input_shape=target_shape))
+    # model.add(BatchNormalization(name='block1_bn1'))
+
+    model.add(Convolution2D(1, (1, 1), activation='relu', padding='same',
+        name='block1_conv1'))
     model.add(BatchNormalization(name='block1_bn1'))
-
-    model.add(Convolution2D(32, (1, 1), activation='relu', padding='same',
-        name='block1_conv2'))
-    model.add(BatchNormalization(name='block1_bn2'))
-
-    model.add(Convolution2D(2, (1, 1), activation='relu', padding='same', name='block1_conv3'))
-    model.add(BatchNormalization(name='block1_bn3'))
-
-    model.add(Convolution2D(1, (1, 1), activation='relu', padding='same', name='block1_conv4'))
-
-    # Block 2
     model.add(Flatten(name='flatten'))
-    model.add(Dense(4096, activation='relu', kernel_initializer='glorot_normal', name='fc1'))
-    model.add(Dense(2048, activation='relu', kernel_initializer='glorot_normal', name='fc2'))
-    model.add(Dense(37, activation='relu', kernel_initializer='glorot_normal', name='predictions'))
+    model.add(Dense(37, activation='identity', kernel_initializer='glorot_normal', name='predictions'))
+
 
     return model
 
@@ -174,7 +166,7 @@ def eval_network(kfold_sets, activations):
 if __name__ == '__main__':
 
     mat_file = '../data/02mean_d1.mat'
-    activity_file = '../data/02_stats.mat'
+    activity_file = '../data/02_stats_early.mat'
     print('loading mat data...', mat_file)
     mat_contents = sio.loadmat(mat_file)
     activity_contents = sio.loadmat(activity_file)

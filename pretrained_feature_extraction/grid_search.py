@@ -11,7 +11,7 @@ import csv
 import scipy.stats as stats
 
 def train(layers):
-    target_scale = (956,14,14,512)
+    target_scale = (956,28,28,256)
     activations = build(layers, target_scale)
 
     X_train = activations[idxs]
@@ -27,7 +27,6 @@ def train(layers):
     del activations, X_train, y_train
     gc.collect()
 
-    import pdb; pdb.set_trace()
     return clf
 
 def print_out(clf, layers):
@@ -71,7 +70,7 @@ if __name__ == '__main__':
     all_blocks.extend(block4)
     all_blocks.extend(block5)
 
-    combos = [e for e in itertools.combinations(all_blocks, 3)]
+    combos = [e for e in itertools.combinations(all_blocks, 2)]
 
     for layers in combos:
 

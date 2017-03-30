@@ -160,7 +160,6 @@ if __name__ == '__main__':
     img_path = 'cat.jpg'
     img = image.load_img(img_path, target_size=(224, 224))
     x = image.img_to_array(img)
-    import pdb; pdb.set_trace()
     x = np.expand_dims(x, axis=0)
     x = preprocess_input(x)
     print('Input image shape:', x.shape)

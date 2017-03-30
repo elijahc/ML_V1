@@ -11,9 +11,9 @@ class DeepOracleRegressor(BaseEstimator, RegressorMixin):
         self.epochs=epochs
         self.batch_size=batch_size
 
-        self.target_scale = (956,14,14,512)
+        self.target_scale = (956,28,28,256)
 
-        self.model = DeepOracle(target_shape=(14,14,512*3))
+        self.model = DeepOracle(target_shape=(28,28,256*2))
         self.model.compile(
                 optimizer=self.optimizer,
                 loss=self.loss)
