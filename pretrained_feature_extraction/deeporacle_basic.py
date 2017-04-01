@@ -1,21 +1,18 @@
 import scipy.io as sio
+import joblib
 import numpy as np
 import h5py
-import gc
+import tensorflow as tf
 from tqdm import tqdm
 import cv2
-from keras_tqdm import TQDMCallback
 from vgg19 import VGG19
 from keras.preprocessing import image as ki
 from keras.models import Model, Sequential
-from keras.layers import Flatten, Dense, Input, Lambda
+from keras.layers import Flatten, Dense, Input, Lambda, Dropout
 from keras.layers import Convolution2D, MaxPooling2D, BatchNormalization
 from keras import backend as K
 from imagenet_utils import preprocess_input
 from scipy.ndimage.interpolation import zoom
-from skimage.color import gray2rgb
-from skimage.io import imread
-from skimage.transform import resize
 from selectivity import si
 from sklearn.base import BaseEstimator
 from sklearn.metrics import explained_variance_score as fev
@@ -27,7 +24,7 @@ def DeepOracle(target_shape=(14,14,512*3)):
     if K.image_dim_ordering() == 'th':
         input_shape = (num_feat, None, None)
     else:
-        input_shape = (224, 224, 3)
+        input_shape = target_shape
         # input_shape = np.squeeze(activation_input).shape
 
     # Convolution Architecture
@@ -38,11 +35,12 @@ def DeepOracle(target_shape=(14,14,512*3)):
     # model.add(BatchNormalization(name='block1_bn1'))
 
     model.add(Convolution2D(1, (1, 1), activation='relu', padding='same',
-        name='block1_conv1'))
+        name='block1_conv1', input_shape=target_shape))
     model.add(BatchNormalization(name='block1_bn1'))
     model.add(Flatten(name='flatten'))
-    model.add(Dense(37, activation='identity', kernel_initializer='glorot_normal', name='predictions'))
-
+    model.add(Dense(300, name='fc'))
+    model.add(Dropout(0.5))
+    model.add(Dense(37, name='predictions'))
 
     return model
 
@@ -100,13 +98,16 @@ def build(layers=None, target_scale=None):
             images = np.array(images)
 
             activation_fetcher = get_activation(base_model, layer)
-            layer_activation = activation_fetcher.predict(images,batch_size=32,verbose=1)
-            num_imgs = layer_activation.shape[0]
-            num_features = layer_activation.shape[3]
-            sc_fac = tuple(list(np.array([num_imgs, target_scale[0], target_scale[1], num_features])/np.array(layer_activation.shape)))
-            print('Rescaling by factor: ', sc_fac)
-            print('resizing feature map...')
-            layer_activation = zoom(layer_activation, sc_fac, order=0)
+            layer_activation = activation_fetcher.predict(images,batch_size=32,verbose=1).astype(np.float16)
+
+            # if rescaling uncomment this
+
+            # num_imgs = layer_activation.shape[0]
+            # num_features = layer_activation.shape[3]
+            # sc_fac = tuple(list(np.array([num_imgs, target_scale[0], target_scale[1], num_features])/np.array(layer_activation.shape)))
+            # print('Rescaling by factor: ', sc_fac)
+            # print('resizing feature map...')
+            # layer_activation = zoom(layer_activation, sc_fac, order=0)
             # for img in tqdm(images):
             #     img = np.expand_dims(img, axis=0)
             #     layer_activation.extend([ feature ])
@@ -118,21 +119,22 @@ def build(layers=None, target_scale=None):
             del images
             pass
 
-        activations.extend([ layer_activation ])
+        activations.extend([ layer_activation.astype(np.float32) ])
 
     f.close()
-    del f, layer_activation
-    gc.collect()
+    # del f, layer_activation
+    # gc.collect()
 
     activations = np.concatenate(activations, axis=3)
 
     return activations
 
-def eval_network(kfold_sets, activations):
+def eval_network(kfold_sets, activations, activity):
     y_pred_list = []
     ppcc_list = []
+    fev_list = []
     ppcc_baseline_list = []
-    for train_idxs, valid_idxs in kfold_sets:
+    for train_idxs, valid_idxs in tqdm(kfold_sets, desc='kfold', leave=False):
         train_activity = activity[train_idxs]
         valid_activity = activity[valid_idxs]
 
@@ -140,17 +142,24 @@ def eval_network(kfold_sets, activations):
         valid_activations = activations[valid_idxs]
 
 
-        model = DeepOracle(activations.shape[1:])
+        mod = DeepOracle(activations.shape[1:])
 
-        model.compile(
+        # reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=0.0001)
+        mod.compile(
                 optimizer='adam',
                 loss='mse',
                 metrics=[])
 
-        model.fit(train_activations, train_activity, batch_size=32, nb_epoch=20)
+        mod.fit(train_activations, train_activity,
+                batch_size=32,
+                epochs=20,
+                verbose=0
+                )
 
-        y_pred = model.predict(valid_activations, batch_size=32)
+        y_pred = mod.predict(valid_activations, batch_size=32)
         ppcc = pairwise_pcc(valid_activity,y_pred)
+        fev_vals = fev(valid_activity, y_pred, multioutput='raw_values')
+        fev_list.extend([fev_vals])
         ppcc_list.extend([ppcc])
 
         #y_baseline = gen_y_fake(valid_activity, sem_activity[valid_idxs])
@@ -161,17 +170,25 @@ def eval_network(kfold_sets, activations):
 
         #si = si(valid_activity)
 
-    return ppcc_list
+    return dict(ppcc_list=ppcc_list, fev_list=fev_list)
 
 if __name__ == '__main__':
+    try:
+        tf.InteractiveSession()
+    except:
+        pass
 
-    mat_file = '../data/02mean_d1.mat'
-    activity_file = '../data/02_stats_early.mat'
-    print('loading mat data...', mat_file)
-    mat_contents = sio.loadmat(mat_file)
-    activity_contents = sio.loadmat(activity_file)
-    activity = activity_contents['resp_mean'].swapaxes(0,1)
-    sem_activity = activity_contents['resp_sem'].swapaxes(0,1)
+    # mat_file = '../data/02mean_d1.mat'
+    early_file = '../data/02_stats_early.mat'
+    late_file = '../data/02_stats_late.mat'
+    print('loading ', early_file, '...')
+    print('loading ', late_file, '...')
+
+    e_activity_contents = sio.loadmat(early_file)
+    l_activity_contents = sio.loadmat(late_file)
+
+    e_activity = e_activity_contents['resp_mean'].swapaxes(0,1)
+    l_activity = l_activity_contents['resp_mean'].swapaxes(0,1)
 
     # images = mat_contents['images']
     train_frac = 0.8
@@ -189,44 +206,69 @@ if __name__ == '__main__':
     kfold_sets = [ train_test(idxs, train_frac) for _ in np.arange(5) ]
     target_scale = (956,56,56,128)
 
-    base_model_layers = [ layer.name for layer in base_model.layers[1:-5] ]
+    #base_model_layers = [ layer.name for layer in base_model.layers[1:-5] ]
 
     # DeepGaze II layers
 
-    block3 = ['block3_conv1', 'block3_conv2', 'block3_conv3', 'block3_conv4', 'block3_pool']
-    block4 = ['block4_conv3', 'block4_conv1', 'block4_conv2', 'block4_conv4', 'block4_pool']
-    DG2 = np.array(base_model_layers)[[16, 17, 19]]
+    tails = [
+        ['block1_conv2'],
+        ['block2_conv2'],
+        ['block3_conv4']
+        ]
+    bottom_layers = [
+        ['block1_conv1'],
+        ['block1_conv2'],
+        ['block2_conv1'],
+        ['block2_conv2']
+        ]
+    block3 = [
+        ['block3_conv1'],
+        ['block3_conv2'],
+        ['block3_conv3'],
+        ['block3_conv4']
+    ]
 
-    results = []
-    for block in [block3, block4, DG2]:
-        layers, activations = build_random( using=block, choose=3, target_scale=target_scale)
+    block4 = [
+        ['block4_conv1'],
+        ['block4_conv2'],
+        ['block4_conv3'],
+        ['block4_conv4']
+    ]
 
-        ppcc_list = eval_network(kfold_sets, activations)
-        results.extend([ {'network': layers, 'ppcc_list': ppcc_list}])
+    block5 = [
+        ['block5_conv1'],
+        ['block5_conv2'],
+        ['block5_conv3'],
+        ['block5_conv4']
+        ]
+    #DG2 = np.array(base_model_layers)[[16, 17, 19]]
 
-    import pdb; pdb.set_trace()
+    use_layers = []
+    use_layers.extend(bottom_layers)
+    use_layers.extend(block3)
+    use_layers.extend(block4)
+    use_layers.extend(block5)
+    use_layers = use_layers[1:-1]
 
-    with open('ppcc_block3.csv', 'w') as csvfile:
-        fieldnames = ['ppcc','ppcc_baseline','neuron']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
+    early_results = []
+    late_results = []
+    for block in tqdm(use_layers, unit='layer'):
+        activations = build(block, target_scale=(112,112))
 
-        for ppcc, baseline in zip(ppcc_list, ppcc_baseline_list):
-            for n in np.arange(37):
-                writer.writerow({
-                    'ppcc':ppcc[n],
-                    'ppcc_baseline':ppcc_baseline[n],
-                    'neuron': n
-                    })
+        print('evaluating model on early activity for ', block)
+        early_eval_metrics = eval_network(kfold_sets, activations, e_activity)
 
-    with open('evaluation.csv', 'w') as csvfile:
-        fieldnames = ['id','y', 'y_pred', 'neuron']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
+        print('evaluating model on late activity for ', block)
+        late_eval_metrics = eval_network(kfold_sets, activations, l_activity)
 
-        for i,idx in enumerate(valid_idxs):
-            for n in np.arange(37):
-                writer.writerow({'id':idx, 'y': valid_activity[i,n], 'y_pred':y_pred[i,n], 'neuron':n})
-    print('avg_pcc_best: %.3f' % ppcc_baseline.mean())
-    print('avg_pcc: %.3f' % ppcc.mean())
-    print('norm_avg_pcc: %.3f' % (ppcc/ppcc_baseline).mean())
+        early_eval_metrics['network']=block
+        late_eval_metrics['network']=block
+
+        early_results.extend([ early_eval_metrics ])
+        late_results.extend([ late_eval_metrics ])
+
+        print('overwriting early results...')
+        joblib.dump(early_results, 'tmp/early_all_layers.pkl')
+
+        print('overwriting late results...')
+        joblib.dump(late_results, 'tmp/late_all_layers.pkl')

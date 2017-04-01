@@ -152,8 +152,7 @@ def eval_network(kfold_sets, activations):
 
         model.compile(
                 optimizer='adam',
-                loss='mse',
-                metrics=[])
+                loss='mse')
 
         model.fit(train_activations, train_activity, batch_size=32, nb_epoch=20)
 
@@ -201,12 +200,14 @@ if __name__ == '__main__':
 
     # DeepGaze II layers
 
+    tails = ['block1_conv2', 'block2_conv2', 'block3_conv4']
     block3 = ['block3_conv1', 'block3_conv2', 'block3_conv3', 'block3_conv4', 'block3_pool']
     block4 = ['block4_conv3', 'block4_conv1', 'block4_conv2', 'block4_conv4', 'block4_pool']
     DG2 = np.array(base_model_layers)[[16, 17, 19]]
 
     results = []
-    for block in [block3, block4, DG2]:
+
+    for block in [tails]:
         layers, activations = build_random( using=block, choose=3, target_scale=target_scale)
 
         ppcc_list = eval_network(kfold_sets, activations)
