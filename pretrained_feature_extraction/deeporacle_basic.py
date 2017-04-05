@@ -153,7 +153,7 @@ def eval_network(kfold_sets, activations, activity):
         mod.fit(train_activations, train_activity,
                 batch_size=32,
                 epochs=20,
-                verbose=0
+                verbose=1
                 )
 
         y_pred = mod.predict(valid_activations, batch_size=32)
@@ -253,6 +253,7 @@ if __name__ == '__main__':
     early_results = []
     late_results = []
     for block in tqdm(use_layers, unit='layer'):
+        print('starting...')
         activations = build(block, target_scale=(112,112))
 
         print('evaluating model on early activity for ', block)

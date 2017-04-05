@@ -5,7 +5,8 @@ from plotly.graph_objs import Histogram, Layout, Box, Figure
 from plotly import tools
 import plotly.figure_factory as ff
 
-num_layers = 16
+num_layers = 14
+kf = 5
 
 def load_data(early_filepath, late_filepath):
     early = joblib.load(early_filepath)
@@ -28,7 +29,7 @@ def make_figure(plt_data, out_file):
 
 
 
-def plot_ppcc(early_filepath, late_filepath):
+def hist_plot(early_filepath, late_filepath, fname='hist_plot'):
 
     results = load_data(early_filepath, late_filepath)
     labels=['early', 'late']
@@ -55,14 +56,14 @@ def plot_ppcc(early_filepath, late_filepath):
                         name=name)
 
                     )
-    make_figure(plt_data, 'hist_all_layers_early_v_late.html')
+    make_figure(plt_data, fname+'.html')
 
 def line_plot(earlyfb, latefb):
     results = load_data(earlyfp, latefp)
     early, late = results[0], results[1]
 
 
-def box_plot(earlyfp, latefp):
+def box_plot(earlyfp, latefp, fname='box_plot'):
     results = load_data(earlyfp, latefp)
     early, late = results[0], results[1]
 
@@ -77,7 +78,7 @@ def box_plot(earlyfp, latefp):
     for e,l in zip(early, late):
         j=j+1
         data = [np.array(e['ppcc_list']).flatten(), np.array(l['ppcc_list']).flatten()]
-        labels=[[e['network'][0] for _ in np.arange(5*37)],[l['network'][0] for _ in np.arange(5*37)]]
+        labels=[[e['network'][0] for _ in np.arange(kf*37)],[l['network'][0] for _ in np.arange(kf*37)]]
         early_plt_data.extend(data[0].tolist())
         late_plt_data.extend(data[1].tolist())
 
@@ -113,7 +114,7 @@ def box_plot(earlyfp, latefp):
         boxmode='group'
     )
     fig = Figure(data=traces, layout=layout)
-    plotly.offline.plot(fig, filename='box_plot.html')
+    plotly.offline.plot(fig, filename=fname+'.html')
 
 
 def dist_plot(early_filepath, late_filepath):
@@ -143,4 +144,7 @@ def dist_plot(early_filepath, late_filepath):
         plotly.offline.plot(f, filename='%g_traces.html'%i)
 
 
-box_plot('tmp/early_all_layers.pkl', 'tmp/late_all_layers.pkl')
+# box_plot('tmp/early_all_layers.pkl', 'tmp/late_all_layers.pkl')
+hist_plot('tmp/early_lg_all_layers.pkl', 'tmp/late_lg_all_layers.pkl', 'lg_nat_ppcc_hist_layers_early_v_late')
+box_plot('tmp/early_lg_all_layers.pkl', 'tmp/late_lg_all_layers.pkl', 'lg_nat_ppcc_box_layers_early_v_late')
+

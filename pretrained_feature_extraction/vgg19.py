@@ -28,7 +28,7 @@ TF_WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/relea
 
 
 def VGG19(include_top=True, weights='imagenet',
-          input_tensor=None):
+          input_tensor=None, verbose=0):
     '''Instantiate the VGG19 architecture,
     optionally loading weights pre-trained
     on ImageNet. Note that when using TensorFlow,
@@ -118,7 +118,8 @@ def VGG19(include_top=True, weights='imagenet',
 
     # load weights
     if weights == 'imagenet':
-        print('K.image_dim_ordering:', K.image_dim_ordering())
+        if verbose == 1:
+            print('K.image_dim_ordering:', K.image_dim_ordering())
         if K.image_dim_ordering() == 'th':
             if include_top:
                 weights_path = get_file('vgg19_weights_th_dim_ordering_th_kernels.h5',
