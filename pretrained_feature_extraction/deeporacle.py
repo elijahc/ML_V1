@@ -65,14 +65,6 @@ def get_activations(base_model, layers):
 
     return activations
 
-def gen_y_fake(y, sem_y):
-    loc = np.zeros_like(y)
-    z = np.random.normal(loc,sem_y)
-    return (y + z)
-
-def pairwise_pcc(y,y_pred):
-    ppcc = [ np.corrcoef(y_pred[:,i],y[:,i]) for i in np.arange(37)]
-    return np.nan_to_num(np.array(ppcc)[:,1,0])
 
 def train_test(idxs, frac):
     # Randomize indices and partition

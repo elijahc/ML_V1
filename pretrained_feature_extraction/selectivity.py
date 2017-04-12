@@ -21,10 +21,11 @@ if __name__ == '__main__':
     idxs = np.arange(540)[::2]
     si = si(activity)
 
-    with open('selectivity_edc.csv', 'w') as csvfile:
-        fieldnames = ['neuron','si']
+    dir = '/home/elijahc/Dropbox/Kohn_Monkey_Data/v1_predictor_paper/data'
+    with open(dir+'/02_selectivity_index.csv', 'w') as csvfile:
+        fieldnames = ['cell','si']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
         for i,si in enumerate(si):
-            writer.writerow({'neuron':i, 'si':si})
+            writer.writerow({'cell':i, 'si':si})

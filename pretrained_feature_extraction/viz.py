@@ -144,7 +144,7 @@ def dist_plot(early_filepath, late_filepath):
         plotly.offline.plot(f, filename='%g_traces.html'%i)
 
 
-# box_plot('tmp/early_all_layers.pkl', 'tmp/late_all_layers.pkl')
-hist_plot('tmp/early_lg_all_layers.pkl', 'tmp/late_lg_all_layers.pkl', 'lg_nat_ppcc_hist_layers_early_v_late')
-box_plot('tmp/early_lg_all_layers.pkl', 'tmp/late_lg_all_layers.pkl', 'lg_nat_ppcc_box_layers_early_v_late')
+#box_plot('tmp/early_all_layers.pkl', 'tmp/late_all_layers.pkl')
 
+hist_plot('tmp/early_sm_all_layers.pkl', 'tmp/late_sm_all_layers.pkl', 'sm_nat_ppcc_hist_layers_early_v_late')
+box_plot('tmp/early_sm_all_layers.pkl', 'tmp/late_sm_all_layers.pkl', 'sm_nat_ppcc_box_layers_early_v_late')

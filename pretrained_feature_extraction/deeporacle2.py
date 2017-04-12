@@ -19,7 +19,7 @@ from sklearn.base import BaseEstimator
 from sklearn.metrics import explained_variance_score as fev
 import csv
 
-def DeepOracle(lname=None, fc_size=300, dropout=0.5):
+def DeepOracle(lname='block5_conv1', fc_size=300, dropout=0.5):
 
     base = VGG19(weights='imagenet')
     layers = base.layers
@@ -34,7 +34,7 @@ def DeepOracle(lname=None, fc_size=300, dropout=0.5):
 
     # Convolutional readout network
     readout = [
-    Convolution2D(1, (1, 1), activation='relu', padding='same',name='readout_conv1', input_shape=in_shape),
+    Convolution2D(2, (1, 1), activation='relu', padding='same',name='readout_conv1', input_shape=in_shape),
     BatchNormalization(name='readout_bn1'),
     Flatten(name='flatten'),
     Dense(fc_size, name='fc'),
@@ -44,7 +44,9 @@ def DeepOracle(lname=None, fc_size=300, dropout=0.5):
 
     layers.extend(readout)
 
-    return Sequential(layers)
+    m = Sequential(layers)
+    m.compile(optimizer='adam', loss='mse')
+    return m
 
 def gen_y_fake(y, sem_y):
     loc = np.zeros_like(y)
@@ -82,10 +84,6 @@ def eval_network(kfold_sets, layer_name, activity):
         valid_images = images[valid_idxs]
 
         # reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.000001)
-        net.compile(
-                optimizer='adam',
-                loss='mse',
-                metrics=[])
 
         net.fit(train_images, train_activity,
                 batch_size=32,
@@ -135,11 +133,11 @@ if __name__ == '__main__':
     # idxs = np.arange(540)[::2]
 
     # Small Natural Images and gratings
-    idxs = np.arange(540)[::2]
+    # idxs = np.arange(540)[::2]
     #idxs = np.concatenate([idxs, np.arange(540,732)])
 
     # Large Natural Images
-    # idxs = np.arange(540)[::2] + 1
+    idxs = np.arange(540)[::2]
 
     kfold_sets = [ train_test(idxs, train_frac) for _ in np.arange(5) ]
     target_scale = (956,56,56,128)
@@ -208,7 +206,7 @@ if __name__ == '__main__':
         late_results.extend([ late_eval_metrics ])
 
         print('overwriting early results...')
-        joblib.dump(early_results, 'tmp/early_lg_all_layers.pkl')
+        joblib.dump(early_results, 'tmp/early_sm_all_layers.pkl')
 
         print('overwriting late results...')
-        joblib.dump(late_results, 'tmp/late_lg_all_layers.pkl')
+        joblib.dump(late_results, 'tmp/late_sm_all_layers.pkl')
